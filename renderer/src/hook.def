@@ -1,0 +1,4 @@
+EXPORTS
+    AITD4_Initialize=_AITD4_Initialize@4
+    AITD4_GetRendererDiagnostics=_AITD4_GetRendererDiagnostics@4
+    AITD4_RequestRendererCapture=_AITD4_RequestRendererCapture@4

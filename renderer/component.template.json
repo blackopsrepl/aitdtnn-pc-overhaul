@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "id": "aitdnn-pc-renderer",
+  "name": "AITD:TNN PC Renderer",
+  "version": "0.2.0",
+  "copyrighted_assets": false,
+  "dreamcast_image_required": false,
+  "shell_integration": false,
+  "supported_executables": [
+    {
+      "name": "English 15-slot/no-CD",
+      "sha256": "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672"
+    }
+  ],
+  "load": {
+    "order": 20,
+    "dll": "renderer/aitd4-renderer-hook.dll",
+    "initialize_export": "AITD4_Initialize",
+    "diagnostics_export": "AITD4_GetRendererDiagnostics",
+    "capture_export": "AITD4_RequestRendererCapture",
+    "fail_closed": true
+  },
+  "payload": [
+    {
+      "source": "bin/aitd4-renderer-hook.dll",
+      "destination": "renderer/aitd4-renderer-hook.dll"
+    },
+    {
+      "source": "config/aitd4-overhaul.renderer.ini",
+      "destination": "renderer/aitd4-overhaul.ini"
+    },
+    {
+      "source": "shaders/compositor.vert",
+      "destination": "renderer/shaders/compositor.vert"
+    },
+    {
+      "source": "shaders/compositor.frag",
+      "destination": "renderer/shaders/compositor.frag"
+    }
+  ]
+}

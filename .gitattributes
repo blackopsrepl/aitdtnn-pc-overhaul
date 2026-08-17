@@ -1,0 +1,13 @@
+* text=auto
+*.ps1 text eol=crlf
+*.iss text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.c text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+*.py text eol=lf
+*.exe binary
+*.dll binary
+*.zip binary

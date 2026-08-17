@@ -1,0 +1,3 @@
+LIBRARY "aitd4-audio-hook"
+EXPORTS
+    AITD4_AudioInitialize=_AITD4_AudioInitialize@4

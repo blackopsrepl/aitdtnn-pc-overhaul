@@ -1,0 +1,3 @@
+LIBRARY "aitd4-rumble-hook"
+EXPORTS
+    AITD4_RumbleInitialize=_AITD4_RumbleInitialize@4

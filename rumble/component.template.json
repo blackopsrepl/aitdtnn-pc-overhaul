@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "id": "aitdtnn-pc-rumble",
+  "name": "AITD:TNN Dreamcast Rumble Restoration",
+  "version": "0.2.0",
+  "copyrighted_assets": false,
+  "dreamcast_image_required": false,
+  "shell_integration": false,
+  "supported_executables": [
+    {
+      "name": "English 15-slot/no-CD",
+      "sha256": "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672"
+    }
+  ],
+  "load": {
+    "order": 30,
+    "dll": "rumble/aitd4-rumble-hook.dll",
+    "initialize_export": "AITD4_RumbleInitialize",
+    "fail_closed": true
+  },
+  "payload": [
+    {
+      "source": "bin/aitd4-rumble-hook.dll",
+      "destination": "rumble/aitd4-rumble-hook.dll"
+    },
+    {
+      "source": "config/aitd4-rumble.ini",
+      "destination": "rumble/aitd4-rumble.ini"
+    }
+  ]
+}
