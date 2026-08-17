@@ -96,4 +96,17 @@ foreach ($componentRoot in $rendererRoot, $rumbleRoot) {
     }
 }
 
+foreach ($powerShellSource in @(
+    (Join-Path $repoRoot 'installer\Manage-Overhaul.ps1'),
+    (Join-Path $repoRoot 'installer\tests\Test-InstallerLifecycle.ps1')
+)) {
+    $tokens = $null
+    $parseErrors = $null
+    [System.Management.Automation.Language.Parser]::ParseFile(
+        $powerShellSource, [ref]$tokens, [ref]$parseErrors) | Out-Null
+    if ($parseErrors) {
+        throw "PowerShell syntax validation failed for $powerShellSource`: $($parseErrors[0].Message)"
+    }
+}
+
 Write-Host "Built: $proxyDll"

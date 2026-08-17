@@ -39,6 +39,11 @@ PATCH_METADATA_SUFFIX = ".aitdtnn-patch.json"
 PATCH_APPLIED = 0
 PATCH_ALREADY_APPLIED = 10
 
+# The PE patcher below is retained only as source-level history and as a tested
+# recovery reference for pre-monorepo development builds. It is intentionally
+# absent from main(), the packaged asset-builder CLI and the release installer.
+# The published architecture always leaves alone4.exe byte-for-byte unchanged.
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -939,30 +944,6 @@ def build_assets(disc: DiscFiles, output: Path, source_label: str) -> dict[str, 
 
 
 def main() -> int:
-    if len(sys.argv) == 3 and sys.argv[1] == "--check-exe":
-        try:
-            profile = detect_executable_profile(Path(sys.argv[2]).resolve())
-        except (OSError, ValueError) as error:
-            print(f"ERROR: {error}", file=sys.stderr)
-            return 1
-        print(profile)
-        return 0
-    if len(sys.argv) == 3 and sys.argv[1] == "--patch-exe":
-        try:
-            result, profile = patch_executable(Path(sys.argv[2]))
-        except (OSError, ValueError, json.JSONDecodeError) as error:
-            print(f"ERROR: {error}", file=sys.stderr)
-            return 1
-        print(f"{profile}: {'already patched' if result == PATCH_ALREADY_APPLIED else 'patched'}")
-        return result
-    if len(sys.argv) == 3 and sys.argv[1] == "--unpatch-exe":
-        try:
-            result = unpatch_executable(Path(sys.argv[2]))
-        except (OSError, ValueError, json.JSONDecodeError) as error:
-            print(f"ERROR: {error}", file=sys.stderr)
-            return 1
-        print("already restored" if result == PATCH_ALREADY_APPLIED else "restored")
-        return result
     parser = argparse.ArgumentParser(description="Build AITD:TNN PC Music Fix assets from an owned Dreamcast disc")
     parser.add_argument("dreamcast_image", type=Path)
     parser.add_argument("output", type=Path)

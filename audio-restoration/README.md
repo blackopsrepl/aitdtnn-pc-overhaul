@@ -2,8 +2,10 @@
 
 This module makes the Windows game render interactive music and ambience through
 the Dreamcast release's Manatee driver, program maps, sample banks and AICA
-synthesis. The equivalent live sequence events are taken from the PC engine;
-the audited PC and Dreamcast sequence payloads are byte-identical. PC sound
+synthesis. Live sequence events are taken from the PC engine; extracted
+Dreamcast DSEQ data is used for identity evidence, not independently scheduled.
+The module therefore restores the Dreamcast synthesis/bank path but does not
+claim to replace a genuinely different PC scene-to-cue decision. PC sound
 effects and native FMV audio remain on their original paths.
 
 No copyrighted game or Dreamcast assets are included. The combined overhaul

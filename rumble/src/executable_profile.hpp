@@ -46,8 +46,10 @@ constexpr CodeInterval kClaimedCodeIntervals[] = {
     {0x00097c0du, 6},  // audio dispatcher
     {0x000a3e02u, 5}, // renderer input getter
     {0x0007fce5u, 5}, // renderer character confirmation
+    {0x000bae94u, 5}, // renderer post-selection movie continuation
     {0x000812cfu, 9}, // renderer movie request
     {0x0009dedfu, 5}, // renderer movie skip getter
+    {0x0009df37u, 5}, // renderer native Bink frame lifecycle
 };
 
 }  // namespace aitdtnn::rumble

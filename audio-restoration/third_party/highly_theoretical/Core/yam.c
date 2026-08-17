@@ -2,6 +2,9 @@
 //
 // yam - Emulates Yamaha SCSP and AICA
 //
+// Modified 2026-08-16 by the AITD:TNN PC Overhaul project:
+// added the YAM_DISABLE_DYNAREC build guard used by the integrated renderer.
+//
 /////////////////////////////////////////////////////////////////////////////
 
 #ifndef EMU_COMPILE

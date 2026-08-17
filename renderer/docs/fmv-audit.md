@@ -31,7 +31,7 @@ path beginning at `0x0047FCE5` advances selection state from 2 to 3, then the
 branch at `0x0047FD0E` tests item `0x2001` and sets character flag bit 4. The
 other authored item is `0x2002`.
 
-The byte-identical Dreamcast logic supplies the missing movie request and proves
+The homologous Dreamcast control flow supplies the missing movie request and proves
 the names:
 
 1. Dreamcast character select `0x8C04A010` sets flag bit 4 for item `0x2001` and

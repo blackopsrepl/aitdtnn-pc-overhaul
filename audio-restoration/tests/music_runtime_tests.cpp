@@ -55,7 +55,7 @@ int main() {
     }
     {
         const auto aline = aitd4::music_identity::container_from_path(
-            R"(D:\Games\AITD4\MIDI\ALINE\Jardin2)");
+            R"(C:\Games\AITD4\MIDI\ALINE\Jardin2)");
         const auto carnby = aitd4::music_identity::container_from_path(
             R"(.\midi/carnby/act_c13)");
         assert(aline && *aline == "jardin2");

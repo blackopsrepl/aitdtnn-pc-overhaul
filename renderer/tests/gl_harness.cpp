@@ -294,11 +294,35 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
             if (!valid) return 28;
         }
     }
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glDisable(GL_COLOR_LOGIC_OP);
+    SendMessageA(window, WM_ACTIVATEAPP, FALSE, 0);
+    SendMessageA(window, WM_ACTIVATEAPP, TRUE, 0);
+    LARGE_INTEGER frequency{};
+    LARGE_INTEGER timing_start{};
+    LARGE_INTEGER timing_end{};
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&timing_start);
+    constexpr int timed_frames = 18;
+    for (int frame = 0; frame < timed_frames; ++frame) {
+        viewport(0, 0, static_cast<GLsizei>(status.render_width),
+                 static_cast<GLsizei>(status.render_height));
+        glClearColor(0.18f, 0.18f, 0.18f, 1.0f);
+        clear(GL_COLOR_BUFFER_BIT);
+        if (!swap_buffers(dc)) return 38;
+    }
+    QueryPerformanceCounter(&timing_end);
+    const double timed_seconds = static_cast<double>(timing_end.QuadPart - timing_start.QuadPart) /
+                                 static_cast<double>(frequency.QuadPart);
+    if (timed_seconds > 6.0) return 39;
     if (!diagnostics(&status) || !status.initialized || !status.framebuffer_ready) return 16;
     if (status.gl_major < 3 || (status.gl_major == 3 && status.gl_minor < 3)) return 17;
     if (status.samples != 4 || status.color_bits < 32 || status.alpha_bits < 8 ||
         status.depth_bits < 24 ||
         status.stencil_bits < 8) return 18;
+    if (!status.crt_enabled || !status.crt_ready || status.crt_signal_width != 640 ||
+        status.crt_signal_height != 480) return 40;
     if (status.render_width * 3 != status.render_height * 4 ||
         status.viewport_width * 3 != status.viewport_height * 4) return 19;
     if (status.viewport_x * 2 + static_cast<LONG>(status.viewport_width) !=
@@ -306,12 +330,14 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
         status.viewport_y * 2 + static_cast<LONG>(status.viewport_height) !=
             static_cast<LONG>(status.physical_height)) return 20;
     std::printf("renderer harness passed gl=%lu.%lu logical=%lux%lu physical=%lux%lu "
-                "viewport=%ld,%ld %lux%lu samples=%lu aniso=%lu format=%lu/%lu/%lu/%lu\n",
+                "viewport=%ld,%ld %lux%lu samples=%lu aniso=%lu format=%lu/%lu/%lu/%lu "
+                "crt_ms_per_frame=%.3f\n",
                 status.gl_major, status.gl_minor, status.render_width, status.render_height,
                 status.physical_width, status.physical_height, status.viewport_x,
                 status.viewport_y, status.viewport_width, status.viewport_height,
                 status.samples, status.anisotropy, status.color_bits, status.alpha_bits,
-                status.depth_bits, status.stencil_bits);
+                status.depth_bits, status.stencil_bits,
+                timed_seconds * 1000.0 / timed_frames);
     make_current(nullptr, nullptr);
     delete_context(context);
     aitd4::RendererDiagnostics deleted_status{};

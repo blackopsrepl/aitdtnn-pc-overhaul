@@ -36,6 +36,22 @@
     {
       "source": "shaders/compositor.frag",
       "destination": "renderer/shaders/compositor.frag"
+    },
+    {
+      "source": "shaders/crt_signal.frag",
+      "destination": "renderer/shaders/crt_signal.frag"
+    },
+    {
+      "source": "shaders/crt_response.frag",
+      "destination": "renderer/shaders/crt_response.frag"
+    },
+    {
+      "source": "shaders/crt_blur.frag",
+      "destination": "renderer/shaders/crt_blur.frag"
+    },
+    {
+      "source": "shaders/crt_present.frag",
+      "destination": "renderer/shaders/crt_present.frag"
     }
   ]
 }

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat" >nul
+call "..\shared\tools\vcvars32.cmd"
 if errorlevel 1 exit /b %errorlevel%
 if not exist build mkdir build
 if not exist bin mkdir bin

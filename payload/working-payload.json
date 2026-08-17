@@ -1,0 +1,42 @@
+{
+  "format": 1,
+  "description": "Exact runtime payload from the validated working installation",
+  "files": [
+    {
+      "path": "game/version.dll",
+      "sha256": "2FA5363B3D9565ADA0A1B11EB8C86BDE36A924CDEBB85CD364311EBC6E72B130"
+    },
+    {
+      "path": "game/audio-restoration/aitd4-audio-hook.dll",
+      "sha256": "70F2FCF77DD8724A3F1DEB07D6C31308C00BAF7CA2507432DDAAEC87B786B93C"
+    },
+    {
+      "path": "game/renderer/aitd4-renderer-hook.dll",
+      "sha256": "2992C169187EBA5EBEC6E06AE7C35B5ED02C6F7B560CBBF6C1D99EA750069A8A"
+    },
+    {
+      "path": "game/rumble/aitd4-rumble-hook.dll",
+      "sha256": "C92B155733F1A585E9A028266C9D85EB510C0BC075700521CD8B6AF868C49CBA"
+    },
+    {
+      "path": "game/dinput8.dll",
+      "sha256": "7F2A1C7616515153D899B726C8ECF72D5FA81C27A9D14B5C394CDD2E09F325C5"
+    },
+    {
+      "path": "game/winmm.dll",
+      "sha256": "3FC06A49AD833174B4CE7A5269043C7DA41AF14A64068F3612F58E1D769B44FE"
+    },
+    {
+      "path": "game/Xidi.32.dll",
+      "sha256": "771C991CFBF7D02DC58EB1A83CA39A68B1A029446CFEF1F8875150DE6ACA38A8"
+    },
+    {
+      "path": "game/Xidi.ini",
+      "sha256": "64F503799FCE8F3FF1469A2F63D8EFF9ABEE178EFDF1530EBEF1B39026352FF9"
+    },
+    {
+      "path": "game/keys.bin",
+      "sha256": "48E1BE74D9FF89AE468F19097B348A4AE42F90C22C2903B52B0250D1BC5F352E"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-call "C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat" >nul
+call "..\shared\tools\vcvars32.cmd"
 if errorlevel 1 exit /b %errorlevel%
 if not exist build mkdir build
 if not exist bin mkdir bin
@@ -18,6 +18,11 @@ if errorlevel 1 exit /b %errorlevel%
 cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /I src ^
   /Fo:build\movie_skip_gate_test.obj /Fe:build\movie-skip-gate-test.exe ^
   tests\movie_skip_gate_test.cpp /link /Brepro
+if errorlevel 1 exit /b %errorlevel%
+
+cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /I src ^
+  /Fo:build\crt_pipeline_test.obj /Fe:build\crt-pipeline-test.exe ^
+  tests\crt_pipeline_test.cpp /link /Brepro
 if errorlevel 1 exit /b %errorlevel%
 
 cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /MT /DWIN32 /LD /Fe:bin\aitd4-renderer-hook.dll ^
@@ -54,10 +59,22 @@ build\viewport-test.exe
 if errorlevel 1 exit /b %errorlevel%
 build\movie-skip-gate-test.exe
 if errorlevel 1 exit /b %errorlevel%
+build\crt-pipeline-test.exe
+if errorlevel 1 exit /b %errorlevel%
 build\aitd4-gl-harness.exe
 if errorlevel 1 exit /b %errorlevel%
 build\aitd4-gl-harness-dynamic.exe
 if errorlevel 1 exit /b %errorlevel%
+set AITD4_TEST_BINK_ALTERNATE_GL=1
+build\aitd4-gl-harness-dynamic.exe
+set alternate_result=%errorlevel%
+set AITD4_TEST_BINK_ALTERNATE_GL=
+if not "%alternate_result%"=="0" exit /b %alternate_result%
+set AITD4_TEST_CRT_ENABLED=0
+build\aitd4-gl-harness-dynamic.exe
+set native_result=%errorlevel%
+set AITD4_TEST_CRT_ENABLED=
+if not "%native_result%"=="0" exit /b %native_result%
 set AITD4_TEST_BINK_FIRST_OPEN_REJECT=1
 build\aitd4-gl-harness-dynamic.exe
 set fallback_result=%errorlevel%
@@ -71,9 +88,11 @@ set AITD4_TEST_LOGICAL_WIDTH=
 set AITD4_TEST_LOGICAL_HEIGHT=
 if not "%test_result%"=="0" exit /b %test_result%
 set AITD4_TEST_BINK_SCALE_REJECT=1
+set AITD4_TEST_CRT_ENABLED=0
 build\aitd4-gl-harness-dynamic.exe
 set reject_result=%errorlevel%
 set AITD4_TEST_BINK_SCALE_REJECT=
+set AITD4_TEST_CRT_ENABLED=
 if not "%reject_result%"=="91" exit /b 92
 echo rejecting Bink scale failed closed as expected
 exit /b 0

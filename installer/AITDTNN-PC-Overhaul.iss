@@ -18,6 +18,7 @@ SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+ArchitecturesAllowed=x64compatible
 UsePreviousAppDir=no
 SetupLogging=yes
 CloseApplications=yes
@@ -29,24 +30,38 @@ UninstallDisplayIcon={code:GetGameExe}
 LicenseFile=..\LICENSE.txt
 
 [Files]
-Source: "..\build\shared-loader\version.dll"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
-Source: "..\audio-restoration\bin\aitd4-audio-hook.dll"; DestDir: "{code:GetGameDir}\audio-restoration"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\version.dll"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\audio-restoration\aitd4-audio-hook.dll"; DestDir: "{code:GetGameDir}\audio-restoration"; Flags: ignoreversion uninsneveruninstall
 Source: "..\audio-restoration\bin\aitdtnn-assets.exe"; Flags: dontcopy
-Source: "..\audio-restoration\bin\aitdtnn-assets.exe"; DestDir: "{app}\tools"; Flags: ignoreversion
+Source: "..\audio-restoration\bin\aitdtnn-assets.exe"; DestDir: "{app}\tools"; Flags: ignoreversion uninsneveruninstall
 Source: "{tmp}\aitdtnn-overhaul-runtime-assets\*"; DestDir: "{code:GetGameDir}\audio-restoration\runtime-assets"; Flags: external recursesubdirs createallsubdirs ignoreversion uninsneveruninstall
-Source: "..\renderer\bin\aitd4-renderer-hook.dll"; DestDir: "{code:GetGameDir}\renderer"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\renderer\aitd4-renderer-hook.dll"; DestDir: "{code:GetGameDir}\renderer"; Flags: ignoreversion uninsneveruninstall
 Source: "..\renderer\config\aitd4-overhaul.renderer.ini"; DestDir: "{code:GetGameDir}\renderer"; DestName: "aitd4-overhaul.ini"; Flags: ignoreversion uninsneveruninstall
 Source: "..\renderer\shaders\compositor.vert"; DestDir: "{code:GetGameDir}\renderer\shaders"; Flags: ignoreversion uninsneveruninstall
 Source: "..\renderer\shaders\compositor.frag"; DestDir: "{code:GetGameDir}\renderer\shaders"; Flags: ignoreversion uninsneveruninstall
-Source: "..\rumble\bin\aitd4-rumble-hook.dll"; DestDir: "{code:GetGameDir}\rumble"; Flags: ignoreversion uninsneveruninstall
+Source: "..\renderer\shaders\crt_signal.frag"; DestDir: "{code:GetGameDir}\renderer\shaders"; Flags: ignoreversion uninsneveruninstall
+Source: "..\renderer\shaders\crt_response.frag"; DestDir: "{code:GetGameDir}\renderer\shaders"; Flags: ignoreversion uninsneveruninstall
+Source: "..\renderer\shaders\crt_blur.frag"; DestDir: "{code:GetGameDir}\renderer\shaders"; Flags: ignoreversion uninsneveruninstall
+Source: "..\renderer\shaders\crt_present.frag"; DestDir: "{code:GetGameDir}\renderer\shaders"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\rumble\aitd4-rumble-hook.dll"; DestDir: "{code:GetGameDir}\rumble"; Flags: ignoreversion uninsneveruninstall
 Source: "..\rumble\config\aitd4-rumble.ini"; DestDir: "{code:GetGameDir}\rumble"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\dinput8.dll"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\winmm.dll"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\Xidi.32.dll"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\Xidi.ini"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\payload\game\keys.bin"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
 Source: "Manage-Overhaul.ps1"; Flags: dontcopy
-Source: "Manage-Overhaul.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
-Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion
-
-[UninstallDelete]
-Type: filesandordirs; Name: "{app}"
+Source: "Manage-Overhaul.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion uninsneveruninstall
+Source: "..\README.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\REPORT.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\NOTICE.md"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\LICENSE.txt"; DestDir: "{app}"; Flags: ignoreversion uninsneveruninstall
+Source: "..\renderer\LICENSE.txt"; DestDir: "{app}\licenses"; DestName: "renderer-MIT.txt"; Flags: ignoreversion uninsneveruninstall
+Source: "..\renderer\THIRD_PARTY.md"; DestDir: "{app}\licenses"; DestName: "renderer-THIRD-PARTY.md"; Flags: ignoreversion uninsneveruninstall
+Source: "..\audio-restoration\THIRD_PARTY.md"; DestDir: "{app}\licenses"; Flags: ignoreversion uninsneveruninstall
+Source: "..\audio-restoration\licenses\*"; DestDir: "{app}\licenses\audio-restoration"; Flags: ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "..\third_party\Xidi-v5.0.0\LICENSE"; DestDir: "{app}\licenses"; DestName: "Xidi-LICENSE.txt"; Flags: ignoreversion uninsneveruninstall
+Source: "..\third_party\Xidi-v5.0.0\README.md"; DestDir: "{app}\licenses"; DestName: "Xidi-README.md"; Flags: ignoreversion uninsneveruninstall
 
 [Code]
 const

@@ -5,7 +5,7 @@
 
 namespace aitd4 {
 
-constexpr DWORD renderer_diagnostics_version = 2;
+constexpr DWORD renderer_diagnostics_version = 3;
 constexpr DWORD renderer_capture_raw = 1;
 constexpr DWORD renderer_capture_output = 2;
 
@@ -37,6 +37,14 @@ struct RendererDiagnostics {
     DWORD bink_output_height{};
     LONG bink_output_x{};
     LONG bink_output_y{};
+    DWORD crt_enabled{};
+    DWORD crt_ready{};
+    DWORD crt_signal_width{};
+    DWORD crt_signal_height{};
+    DWORD bink_presented_frames{};
+    DWORD bink_native_blits_suppressed{};
+    DWORD bink_last_surface_format{};
+    LONG bink_last_pitch{};
 };
 
 }  // namespace aitd4

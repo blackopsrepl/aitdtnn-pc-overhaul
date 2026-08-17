@@ -3,14 +3,10 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$vcvarsCandidates = @(
-    'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars32.bat',
-    'C:\Program Files\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars32.bat',
-    'C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars32.bat',
-    'C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars32.bat'
-)
-$vcvars = $vcvarsCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
-if (-not $vcvars) { throw 'Visual Studio 2022 with the Desktop development with C++ workload was not found.' }
+$vcvars = Join-Path $root '..\shared\tools\vcvars32.cmd'
+if (-not (Test-Path -LiteralPath $vcvars -PathType Leaf)) {
+    throw "Shared Visual Studio environment helper was not found: $vcvars"
+}
 
 New-Item -ItemType Directory -Force -Path (Join-Path $root 'build\core'), (Join-Path $root 'build\native'), (Join-Path $root 'bin') | Out-Null
 Remove-Item -LiteralPath (Join-Path $root 'bin\aitd4-injector.exe') -Force -ErrorAction SilentlyContinue
@@ -32,4 +28,6 @@ $namedExport = $exports | Where-Object { $_ -match '\sAITD4_AudioInitialize$' }
 if ($namedExport.Count -ne 1 -or $exports -match '_AITD4_AudioInitialize@\d+$') {
     throw 'The audio hook must export exactly one undecorated AITD4_AudioInitialize entry.'
 }
+& python -m unittest discover -s (Join-Path $root 'tests') -v
+if ($LASTEXITCODE -ne 0) { throw "Python audio tests failed with exit code $LASTEXITCODE." }
 Write-Host 'Native binaries written to bin\.'

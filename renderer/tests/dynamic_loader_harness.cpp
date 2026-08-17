@@ -4,11 +4,13 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 #include "../src/renderer_api.hpp"
 
 using InitializeFn = DWORD(WINAPI*)(void*);
 using DiagnosticsFn = DWORD(WINAPI*)(aitd4::RendererDiagnostics*);
+using TestNativeMovieFrameFn = DWORD(WINAPI*)(void*, void*);
 using ChoosePixelFormatFn = int(WINAPI*)(HDC, const PIXELFORMATDESCRIPTOR*);
 using SetPixelFormatFn = BOOL(WINAPI*)(HDC, int, const PIXELFORMATDESCRIPTOR*);
 using SwapBuffersFn = BOOL(WINAPI*)(HDC);
@@ -39,6 +41,10 @@ struct BinkStubState {
     int offset_y{};
     std::uint32_t do_frame_calls{};
     std::uint32_t copy_calls{};
+    std::uint32_t blit_calls{};
+    std::uint32_t lock_calls{};
+    std::uint32_t unlock_calls{};
+    std::uint32_t get_rects_calls{};
     std::uint32_t next_frame_calls{};
     std::uint32_t close_calls{};
 };
@@ -52,6 +58,9 @@ extern "C" __declspec(dllimport) void WINAPI BinkClose(void*);
 extern "C" __declspec(dllimport) void* WINAPI BinkBufferOpen(
     HWND, std::uint32_t, std::uint32_t, std::uint32_t);
 extern "C" __declspec(dllimport) int WINAPI BinkBufferSetOffset(void*, int, int);
+extern "C" __declspec(dllimport) void WINAPI BinkBufferBlit(void*, void*, std::uint32_t);
+extern "C" __declspec(dllimport) int WINAPI BinkBufferLock(void*);
+extern "C" __declspec(dllimport) void WINAPI BinkBufferUnlock(void*);
 extern "C" __declspec(dllimport) void WINAPI BinkStubGetState(BinkStubState*);
 
 LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -107,6 +116,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     if (!renderer) return 3;
     const auto initialize = lookup<InitializeFn>(renderer, "AITD4_Initialize");
     const auto diagnostics = lookup<DiagnosticsFn>(renderer, "AITD4_GetRendererDiagnostics");
+    const auto test_native_movie_frame = lookup<TestNativeMovieFrameFn>(
+        renderer, "_AITD4_TestNativeMovieFrame@8");
     if (!initialize || !diagnostics || !initialize(nullptr) || !initialize(nullptr)) return 4;
     if (GetSystemMetrics(SM_CXSCREEN) * 3 != GetSystemMetrics(SM_CYSCREEN) * 4) return 18;
     const auto get_proc_address = current_iat_get_proc_address();
@@ -136,33 +147,6 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
     const int expected_movie_x = geometry.viewport_x;
     const int expected_movie_y = geometry.viewport_y +
         MulDiv(80, static_cast<int>(geometry.viewport_height), 480);
-
-    constexpr std::uint32_t movie_flags = 0x00200000;
-    void* movie = BinkOpen("stub-movie.bik", movie_flags);
-    const bool require_movie_fallback = GetEnvironmentVariableA(
-        "AITD4_TEST_BINK_FIRST_OPEN_REJECT", nullptr, 0) != 0;
-    if (require_movie_fallback) {
-        if (movie) return 20;
-        movie = BinkOpen("alternate\\stub-movie.bik", movie_flags);
-    }
-    if (!movie) return 19;
-    if (BinkDoFrame(movie) != 1 || BinkCopyToBuffer(movie, nullptr, 2560, 480, 0, 0, 0) != 1)
-        return 22;
-    BinkNextFrame(movie);
-    BinkClose(movie);
-    void* bink_buffer = BinkBufferOpen(window, 640, 320, 0);
-    if (!bink_buffer || !BinkBufferSetOffset(bink_buffer, 0, 80)) return 14;
-    BinkStubState bink_state{};
-    BinkStubGetState(&bink_state);
-    const std::uint32_t expected_movie_open_calls = require_movie_fallback ? 2u : 1u;
-    if (bink_state.movie_open_calls != expected_movie_open_calls ||
-        bink_state.movie_open_flags != movie_flags ||
-        bink_state.open_width != 640 || bink_state.open_height != 320 ||
-        bink_state.do_frame_calls != 1 || bink_state.copy_calls != 1 ||
-        bink_state.next_frame_calls != 1 || bink_state.close_calls != 1 ||
-        bink_state.scale_width != expected_movie_width ||
-        bink_state.scale_height != expected_movie_height ||
-        bink_state.offset_x != expected_movie_x || bink_state.offset_y != expected_movie_y) return 15;
 
     HMODULE gdi = LoadLibraryA("gdi32.dll");
     HMODULE gl = LoadLibraryA("opengl32.dll");
@@ -213,6 +197,65 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
         initial_scissor[0] != 0 || initial_scissor[1] != 0 ||
         initial_scissor[2] != static_cast<int>(initialized.render_width) ||
         initial_scissor[3] != static_cast<int>(initialized.render_height)) return 21;
+
+    constexpr std::uint32_t movie_flags = 0x00200000;
+    void* movie = BinkOpen("stub-movie.bik", movie_flags);
+    const bool require_movie_fallback = GetEnvironmentVariableA(
+        "AITD4_TEST_BINK_FIRST_OPEN_REJECT", nullptr, 0) != 0;
+    if (require_movie_fallback) {
+        if (movie) return 20;
+        movie = BinkOpen("alternate\\stub-movie.bik", movie_flags);
+    }
+    if (!movie) return 19;
+    const bool crt_enabled = initialized.crt_enabled != 0;
+    const bool alternate_gl_bink = crt_enabled && GetEnvironmentVariableA(
+        "AITD4_TEST_BINK_ALTERNATE_GL", nullptr, 0) != 0;
+    void* bink_buffer = nullptr;
+    if (!alternate_gl_bink) {
+        bink_buffer = BinkBufferOpen(window, 640, 320, 0);
+        if (!bink_buffer || !BinkBufferSetOffset(bink_buffer, 0, 80)) return 14;
+    }
+    std::vector<std::uint8_t> movie_pixels(static_cast<std::size_t>(640) * 320 * 3);
+    for (std::size_t pixel_index = 0; pixel_index < movie_pixels.size(); pixel_index += 3) {
+        movie_pixels[pixel_index + 0] =
+            static_cast<std::uint8_t>((pixel_index / 3) & 0xff);
+        movie_pixels[pixel_index + 1] = 96;
+        movie_pixels[pixel_index + 2] = 160;
+    }
+    if (alternate_gl_bink) {
+        if (BinkDoFrame(movie) != 1 ||
+            BinkCopyToBuffer(movie, movie_pixels.data(), 640 * 3, 320, 0, 0, 2) != 1 ||
+            !swap_buffers(dc)) return 24;
+        BinkNextFrame(movie);
+    } else if (crt_enabled) {
+        if (!test_native_movie_frame || !test_native_movie_frame(movie, bink_buffer)) return 23;
+    } else {
+        if (!BinkBufferLock(bink_buffer) || BinkDoFrame(movie) != 1 ||
+            BinkCopyToBuffer(movie, movie_pixels.data(), 640 * 3, 320, 0, 0, 2) != 1)
+            return 22;
+        BinkBufferUnlock(bink_buffer);
+        BinkBufferBlit(bink_buffer, nullptr, 0);
+        BinkNextFrame(movie);
+    }
+    BinkClose(movie);
+
+    BinkStubState bink_state{};
+    BinkStubGetState(&bink_state);
+    const std::uint32_t expected_movie_open_calls = require_movie_fallback ? 2u : 1u;
+    if (bink_state.movie_open_calls != expected_movie_open_calls ||
+        bink_state.movie_open_flags != movie_flags ||
+        bink_state.open_width != 640 || bink_state.open_height != 320 ||
+        bink_state.do_frame_calls != 1 || bink_state.copy_calls != 1 ||
+        bink_state.blit_calls != (crt_enabled ? 0u : 1u) ||
+        bink_state.lock_calls != (alternate_gl_bink ? 0u : 1u) ||
+        bink_state.unlock_calls != (alternate_gl_bink ? 0u : 1u) ||
+        bink_state.get_rects_calls != (crt_enabled && !alternate_gl_bink ? 1u : 0u) ||
+        bink_state.next_frame_calls != 1 || bink_state.close_calls != 1 ||
+        bink_state.scale_width != (crt_enabled ? 0u : expected_movie_width) ||
+        bink_state.scale_height != (crt_enabled ? 0u : expected_movie_height) ||
+        bink_state.offset_x != (crt_enabled ? 0 : expected_movie_x) ||
+        bink_state.offset_y != (alternate_gl_bink ? 0 : (crt_enabled ? 80 : expected_movie_y)))
+        return 15;
     viewport(0, 0, 1280, 960);
     clear_color(0.02f, 0.04f, 0.06f, 1.0f);
     clear(gl_color_buffer_bit);
@@ -224,6 +267,11 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
         status.bink_source_height != 320 || status.bink_output_width != expected_movie_width ||
         status.bink_output_height != expected_movie_height ||
         status.bink_output_x != expected_movie_x || status.bink_output_y != expected_movie_y ||
+        status.crt_ready != (crt_enabled ? 1u : 0u) ||
+        status.bink_presented_frames != (crt_enabled ? 1u : 0u) ||
+        status.bink_native_blits_suppressed != (crt_enabled && !alternate_gl_bink ? 1u : 0u) ||
+        status.bink_last_surface_format != (crt_enabled ? 2u : 0u) ||
+        status.bink_last_pitch != (crt_enabled ? 640 * 3 : 0) ||
         status.gl_major < 3 || (status.gl_major == 3 && status.gl_minor < 3) ||
         status.render_width * 3 != status.render_height * 4) return 11;
     std::printf("dynamic loader harness passed gl=%lu.%lu logical=%lux%lu output=%lux%lu\n",

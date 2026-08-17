@@ -21,6 +21,7 @@ $audioRoot = Join-Path $gameRoot 'audio-restoration'
 $rendererRoot = Join-Path $gameRoot 'renderer'
 $rumbleRoot = Join-Path $gameRoot 'rumble'
 $loaderPath = Join-Path $gameRoot 'version.dll'
+$controllerFileNames = @('dinput8.dll', 'winmm.dll', 'Xidi.32.dll', 'Xidi.ini', 'keys.bin')
 $loaderLog = Join-Path $gameRoot 'aitdtnn-overhaul-loader.log'
 $installerErrorLog = Join-Path $gameRoot 'aitdtnn-overhaul-installer-error.log'
 
@@ -55,7 +56,7 @@ function Move-IfPresent([string]$Source, [string]$Destination) {
 
 function Restore-Previous([string]$PreviousRoot) {
     $PreviousRoot = Assert-WithinGame $PreviousRoot
-    foreach ($name in 'audio-restoration', 'renderer', 'rumble', 'version.dll') {
+    foreach ($name in @('audio-restoration', 'renderer', 'rumble', 'version.dll') + $controllerFileNames) {
         $source = Join-Path $PreviousRoot $name
         $destination = Join-Path $gameRoot $name
         if (-not (Test-Path -LiteralPath $source)) { continue }
@@ -87,9 +88,32 @@ function Get-OwnedFiles {
             sha256 = Get-Sha256 $loaderPath
         })
     }
+    foreach ($name in $controllerFileNames) {
+        $path = Join-Path $gameRoot $name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
+        $files.Add([ordered]@{
+            path = $name
+            sha256 = Get-Sha256 $path
+        })
+    }
     foreach ($root in $audioRoot, $rendererRoot, $rumbleRoot) {
         if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
         foreach ($file in Get-ChildItem -LiteralPath $root -Recurse -File) {
+            $relative = $file.FullName.Substring($gameRoot.Length + 1).Replace('\', '/')
+            $files.Add([ordered]@{
+                path = $relative
+                sha256 = Get-Sha256 $file.FullName
+            })
+        }
+    }
+    if (Test-Path -LiteralPath $appRoot -PathType Container) {
+        foreach ($file in Get-ChildItem -LiteralPath $appRoot -Recurse -File) {
+            $relativeWithinApp = $file.FullName.Substring($appRoot.Length + 1).Replace('\', '/')
+            if ($relativeWithinApp -eq 'ownership.json' -or
+                $relativeWithinApp.StartsWith('backup/', [StringComparison]::OrdinalIgnoreCase) -or
+                $relativeWithinApp -match '^unins\d+\.(exe|dat|msg)$') {
+                continue
+            }
             $relative = $file.FullName.Substring($gameRoot.Length + 1).Replace('\', '/')
             $files.Add([ordered]@{
                 path = $relative
@@ -127,6 +151,20 @@ function Test-InstalledTree([object[]]$OwnedFiles) {
             }
         }
     }
+    if (Test-Path -LiteralPath $appRoot -PathType Container) {
+        foreach ($file in Get-ChildItem -LiteralPath $appRoot -Recurse -File) {
+            $relativeWithinApp = $file.FullName.Substring($appRoot.Length + 1).Replace('\', '/')
+            if ($relativeWithinApp -eq 'ownership.json' -or
+                $relativeWithinApp.StartsWith('backup/', [StringComparison]::OrdinalIgnoreCase) -or
+                $relativeWithinApp -match '^unins\d+\.(exe|dat|msg)$') {
+                continue
+            }
+            $relative = $file.FullName.Substring($gameRoot.Length + 1).Replace('\', '/')
+            if (-not $owned.ContainsKey($relative.ToLowerInvariant())) {
+                return $false
+            }
+        }
+    }
     return $true
 }
 
@@ -141,7 +179,47 @@ function Preserve-CurrentInstall {
     Move-IfPresent $rendererRoot (Join-Path $preserved 'renderer')
     Move-IfPresent $rumbleRoot (Join-Path $preserved 'rumble')
     Move-IfPresent $loaderPath (Join-Path $preserved 'version.dll')
+    foreach ($name in $controllerFileNames) {
+        Move-IfPresent (Join-Path $gameRoot $name) (Join-Path $preserved $name)
+    }
+    if (Test-Path -LiteralPath $appRoot -PathType Container) {
+        $appPreserved = Join-Path $preserved 'aitdtnn-overhaul'
+        New-Item -ItemType Directory -Path $appPreserved | Out-Null
+        foreach ($item in Get-ChildItem -LiteralPath $appRoot -Force) {
+            if ($item.Name -eq 'backup' -or $item.Name -match '^unins\d+\.(exe|dat|msg)$') {
+                continue
+            }
+            Copy-Item -LiteralPath $item.FullName -Destination $appPreserved -Recurse -Force
+        }
+    }
     return $preserved
+}
+
+function Remove-OwnedAppFiles([object[]]$OwnedFiles) {
+    $appPrefix = $appRoot.Substring($gameRoot.Length + 1).Replace('\', '/') + '/'
+    foreach ($record in $OwnedFiles) {
+        $relative = [string]$record.path
+        if (-not $relative.StartsWith($appPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+        $path = Join-Path $gameRoot $relative.Replace('/', '\')
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            Remove-Item -LiteralPath $path -Force
+        }
+    }
+    if (Test-Path -LiteralPath (Join-Path $appRoot 'ownership.json') -PathType Leaf) {
+        Remove-Item -LiteralPath (Join-Path $appRoot 'ownership.json') -Force
+    }
+    foreach ($directory in @(
+        (Join-Path $appRoot 'licenses\audio-restoration'),
+        (Join-Path $appRoot 'licenses'),
+        (Join-Path $appRoot 'tools')
+    )) {
+        if ((Test-Path -LiteralPath $directory -PathType Container) -and
+            -not (Get-ChildItem -LiteralPath $directory -Force | Select-Object -First 1)) {
+            Remove-Item -LiteralPath $directory -Force
+        }
+    }
 }
 
 if (-not (Test-Path -LiteralPath $gameRoot -PathType Container)) {
@@ -162,6 +240,14 @@ switch ($Mode) {
         if ($actual -ne $supportedExeHash) {
             throw "Unsupported alone4.exe SHA-256: $actual"
         }
+        if ((Test-Path -LiteralPath (Join-Path $appRoot 'ownership.json') -PathType Leaf) -or
+            (Test-Path -LiteralPath (Join-Path $appRoot 'backup\previous'))) {
+            throw 'An integrated overhaul is already installed. Uninstall it before installing this version; in-place upgrades are refused to preserve rollback ownership.'
+        }
+        if ((Test-Path -LiteralPath $appRoot -PathType Container) -and
+            (Get-ChildItem -LiteralPath $appRoot -Force | Select-Object -First 1)) {
+            throw "The overhaul metadata directory is not empty; refusing to overwrite it: $appRoot"
+        }
         if ([string]::IsNullOrWhiteSpace($BackupPath)) {
             throw 'The installer did not provide a transaction backup path.'
         }
@@ -177,6 +263,9 @@ switch ($Mode) {
         Move-IfPresent $rendererRoot (Join-Path $backup 'renderer')
         Move-IfPresent $rumbleRoot (Join-Path $backup 'rumble')
         Move-IfPresent $loaderPath (Join-Path $backup 'version.dll')
+        foreach ($name in $controllerFileNames) {
+            Move-IfPresent (Join-Path $gameRoot $name) (Join-Path $backup $name)
+        }
         [ordered]@{
             format = 1
             game_executable_sha256 = $actual
@@ -198,12 +287,25 @@ switch ($Mode) {
             (Join-Path $rendererRoot 'aitd4-overhaul.ini'),
             (Join-Path $rendererRoot 'shaders\compositor.vert'),
             (Join-Path $rendererRoot 'shaders\compositor.frag'),
+            (Join-Path $rendererRoot 'shaders\crt_signal.frag'),
+            (Join-Path $rendererRoot 'shaders\crt_response.frag'),
+            (Join-Path $rendererRoot 'shaders\crt_blur.frag'),
+            (Join-Path $rendererRoot 'shaders\crt_present.frag'),
             (Join-Path $rumbleRoot 'aitd4-rumble-hook.dll'),
-            (Join-Path $rumbleRoot 'aitd4-rumble.ini')
+            (Join-Path $rumbleRoot 'aitd4-rumble.ini'),
+            (Join-Path $gameRoot 'dinput8.dll'),
+            (Join-Path $gameRoot 'winmm.dll'),
+            (Join-Path $gameRoot 'Xidi.32.dll'),
+            (Join-Path $gameRoot 'Xidi.ini'),
+            (Join-Path $gameRoot 'keys.bin')
         )) {
             if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
                 throw "Required installed payload is missing: $required"
             }
+        }
+        $previous = Join-Path $appRoot 'backup\previous'
+        if (Test-Path -LiteralPath $previous) {
+            throw "Previous-install backup already exists: $previous"
         }
         New-Item -ItemType Directory -Path $appRoot -Force | Out-Null
         $ownedFiles = @(Get-OwnedFiles)
@@ -213,11 +315,6 @@ switch ($Mode) {
             game_executable_sha256 = $supportedExeHash
             files = $ownedFiles
         } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $appRoot 'ownership.json') -Encoding UTF8
-
-        $previous = Join-Path $appRoot 'backup\previous'
-        if (Test-Path -LiteralPath $previous) {
-            throw "Previous-install backup already exists: $previous"
-        }
         New-Item -ItemType Directory -Path (Split-Path -Parent $previous) -Force | Out-Null
         Move-Item -LiteralPath $backup -Destination $previous
         break
@@ -256,6 +353,13 @@ switch ($Mode) {
             if (Test-Path -LiteralPath $loaderPath -PathType Leaf) {
                 Remove-Item -LiteralPath $loaderPath -Force
             }
+            foreach ($name in $controllerFileNames) {
+                $path = Join-Path $gameRoot $name
+                if (Test-Path -LiteralPath $path -PathType Leaf) {
+                    Remove-Item -LiteralPath $path -Force
+                }
+            }
+            Remove-OwnedAppFiles @($manifest.files)
         } else {
             $preserved = Preserve-CurrentInstall
             Set-Content -LiteralPath (Join-Path $preserved 'README.txt') -Encoding UTF8 -Value @(
@@ -264,7 +368,21 @@ switch ($Mode) {
             )
         }
         $previous = Join-Path $appRoot 'backup\previous'
-        if (Test-Path -LiteralPath $previous) { Restore-Previous $previous }
+        if (Test-Path -LiteralPath $previous) {
+            Restore-Previous $previous
+            $transaction = Join-Path $previous 'transaction.json'
+            if (Test-Path -LiteralPath $transaction -PathType Leaf) {
+                Remove-Item -LiteralPath $transaction -Force
+            }
+            if (-not (Get-ChildItem -LiteralPath $previous -Force | Select-Object -First 1)) {
+                Remove-Item -LiteralPath $previous -Force
+            }
+            $backupRoot = Join-Path $appRoot 'backup'
+            if ((Test-Path -LiteralPath $backupRoot -PathType Container) -and
+                -not (Get-ChildItem -LiteralPath $backupRoot -Force | Select-Object -First 1)) {
+                Remove-Item -LiteralPath $backupRoot -Force
+            }
+        }
         if (Test-Path -LiteralPath $loaderLog -PathType Leaf) {
             Remove-Item -LiteralPath $loaderLog -Force
         }

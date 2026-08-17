@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <gl/GL.h>
 
+#include "bink_frame.hpp"
 #include "character_select_movie_gate.hpp"
 #include "cutscene_input_guard.hpp"
 #include "graphics_hook.hpp"
@@ -15,6 +16,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -34,6 +36,7 @@ namespace {
 #define GL_FRAMEBUFFER_COMPLETE 0x8CD5
 #define GL_DEPTH24_STENCIL8 0x88F0
 #define GL_RGBA8 0x8058
+#define GL_RGBA16F 0x881A
 #define GL_CLAMP_TO_EDGE 0x812F
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
 #define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
@@ -123,8 +126,13 @@ using BinkGetErrorFn = const char*(WINAPI*)();
 using BinkDoFrameFn = std::uint32_t(WINAPI*)(void*);
 using BinkCopyToBufferFn = std::uint32_t(WINAPI*)(void*, void*, std::int32_t, std::uint32_t,
                                                   std::uint32_t, std::uint32_t, std::uint32_t);
+using BinkBufferBlitFn = void(WINAPI*)(void*, void*, std::uint32_t);
+using BinkBufferLockFn = int(WINAPI*)(void*);
+using BinkBufferUnlockFn = void(WINAPI*)(void*);
 using BinkNextFrameFn = void(WINAPI*)(void*);
 using BinkCloseFn = void(WINAPI*)(void*);
+using BinkGetRectsFn = std::uint32_t(WINAPI*)(void*, std::uint32_t);
+using NativeMovieFrameFn = void(__cdecl*)(void*, void*);
 using CharacterSelectAdvanceFn = void(__cdecl*)();
 using PostSelectionPlatformFn = int(__cdecl*)();
 using CurrentMenuItemFn = std::uint32_t(__thiscall*)(void*);
@@ -192,8 +200,13 @@ BinkOpenFn real_bink_open{};
 BinkGetErrorFn real_bink_get_error{};
 BinkDoFrameFn real_bink_do_frame{};
 BinkCopyToBufferFn real_bink_copy_to_buffer{};
+BinkBufferBlitFn real_bink_buffer_blit{};
+BinkBufferLockFn real_bink_buffer_lock{};
+BinkBufferUnlockFn real_bink_buffer_unlock{};
 BinkNextFrameFn real_bink_next_frame{};
 BinkCloseFn real_bink_close{};
+BinkGetRectsFn real_bink_get_rects{};
+NativeMovieFrameFn real_native_movie_frame{};
 CharacterSelectAdvanceFn real_character_select_advance{};
 PostSelectionPlatformFn real_post_selection_platform{};
 CurrentMenuItemFn real_current_menu_item{};
@@ -221,6 +234,36 @@ GLint source_uniform{-1};
 GLint inverse_size_uniform{-1};
 GLint deband_uniform{-1};
 GLint dither_uniform{-1};
+GLuint crt_signal_fbo{};
+GLuint crt_signal_texture{};
+GLuint crt_response_fbo{};
+GLuint crt_response_texture{};
+GLuint crt_blur_horizontal_fbo{};
+GLuint crt_blur_horizontal_texture{};
+GLuint crt_blur_vertical_fbo{};
+GLuint crt_blur_vertical_texture{};
+GLuint bink_canvas_texture{};
+GLuint crt_signal_program{};
+GLuint crt_response_program{};
+GLuint crt_blur_program{};
+GLuint crt_present_program{};
+GLint crt_signal_source_uniform{-1};
+GLint crt_signal_inverse_size_uniform{-1};
+GLint crt_signal_deband_uniform{-1};
+GLint crt_response_source_uniform{-1};
+GLint crt_response_signal_size_uniform{-1};
+GLint crt_response_mask_uniform{-1};
+GLint crt_response_scanline_uniform{-1};
+GLint crt_blur_source_uniform{-1};
+GLint crt_blur_inverse_size_uniform{-1};
+GLint crt_blur_direction_uniform{-1};
+GLint crt_blur_extract_uniform{-1};
+GLint crt_present_source_uniform{-1};
+GLint crt_present_blur_uniform{-1};
+GLint crt_present_bloom_uniform{-1};
+GLint crt_present_halation_uniform{-1};
+GLint crt_present_dither_uniform{-1};
+bool crt_ready{};
 float max_anisotropy{1.0f};
 int gl_major{};
 int gl_minor{};
@@ -240,10 +283,27 @@ bool bink_hooks_ready{};
 std::uint32_t last_bink_source_width{};
 std::uint32_t last_bink_source_height{};
 std::uint32_t last_bink_output_width{};
+void* active_bink_buffer{};
+int active_bink_canvas_x{};
+int active_bink_canvas_y{};
+const std::uint8_t* last_bink_destination{};
+std::int32_t last_bink_pitch{};
+std::uint32_t last_bink_copy_height{};
+std::uint32_t last_bink_copy_flags{};
+std::uint32_t last_bink_copy_x{};
+std::uint32_t last_bink_copy_y{};
+std::vector<std::uint8_t> bink_canvas_rgba;
+std::vector<std::uint8_t> bink_decode_storage;
+std::uint32_t bink_presented_frames{};
+std::uint32_t bink_native_blits_suppressed{};
 void* active_bink_movie{};
 std::uint32_t active_bink_do_frames{};
 std::uint32_t active_bink_copies{};
 std::uint32_t active_bink_next_frames{};
+std::uint32_t active_bink_presented_frames{};
+std::uint32_t active_bink_suppressed_blits{};
+bool artificial_bink_lock{};
+bool alternate_bink_frame_pending{};
 int active_bink_request_id{-1};
 std::uint32_t active_bink_request_serial{};
 int current_movie_request_id{-1};
@@ -258,6 +318,14 @@ int last_bink_output_x{};
 int last_bink_output_y{};
 
 bool initialize_framebuffer();
+bool present_crt_texture(GLuint input_texture, int input_width, int input_height,
+                         bool apply_deband);
+bool capture_frame(const char* label, GLuint framebuffer, GLenum buffer, int width, int height);
+void WINAPI hooked_bink_buffer_blit(void* buffer, void* rectangles,
+                                    std::uint32_t rectangle_count);
+void WINAPI hooked_bink_next_frame(void* bink);
+void __cdecl hooked_native_movie_frame(void* bink, void* buffer);
+bool install_native_movie_frame_hook();
 const char* movie_request_name(int id, char (&name)[9]);
 void __cdecl hooked_movie_request(int id, std::uint32_t skip_mask);
 
@@ -266,6 +334,18 @@ void reset_framebuffer_state(bool destroy_objects) {
     inside_compositor = true;
     if (destroy_objects) {
         if (compositor_program && delete_program) delete_program(compositor_program);
+        if (crt_signal_program && delete_program) delete_program(crt_signal_program);
+        if (crt_response_program && delete_program) delete_program(crt_response_program);
+        if (crt_blur_program && delete_program) delete_program(crt_blur_program);
+        if (crt_present_program && delete_program) delete_program(crt_present_program);
+        const GLuint crt_textures[]{crt_signal_texture, crt_response_texture,
+                                    crt_blur_horizontal_texture, crt_blur_vertical_texture,
+                                    bink_canvas_texture};
+        glDeleteTextures(static_cast<GLsizei>(std::size(crt_textures)), crt_textures);
+        const GLuint crt_fbos[]{crt_signal_fbo, crt_response_fbo,
+                                crt_blur_horizontal_fbo, crt_blur_vertical_fbo};
+        if (delete_framebuffers)
+            delete_framebuffers(static_cast<GLsizei>(std::size(crt_fbos)), crt_fbos);
         if (resolve_texture) glDeleteTextures(1, &resolve_texture);
         if (multisample_depth_stencil && delete_renderbuffers)
             delete_renderbuffers(1, &multisample_depth_stencil);
@@ -284,6 +364,20 @@ void reset_framebuffer_state(bool destroy_objects) {
     inverse_size_uniform = -1;
     deband_uniform = -1;
     dither_uniform = -1;
+    crt_signal_fbo = crt_signal_texture = 0;
+    crt_response_fbo = crt_response_texture = 0;
+    crt_blur_horizontal_fbo = crt_blur_horizontal_texture = 0;
+    crt_blur_vertical_fbo = crt_blur_vertical_texture = 0;
+    bink_canvas_texture = 0;
+    crt_signal_program = crt_response_program = crt_blur_program = crt_present_program = 0;
+    crt_signal_source_uniform = crt_signal_inverse_size_uniform = crt_signal_deband_uniform = -1;
+    crt_response_source_uniform = crt_response_signal_size_uniform = -1;
+    crt_response_mask_uniform = crt_response_scanline_uniform = -1;
+    crt_blur_source_uniform = crt_blur_inverse_size_uniform = crt_blur_direction_uniform = -1;
+    crt_blur_extract_uniform = -1;
+    crt_present_source_uniform = crt_present_blur_uniform = -1;
+    crt_present_bloom_uniform = crt_present_halation_uniform = crt_present_dither_uniform = -1;
+    crt_ready = false;
     framebuffer_ready = false;
     game_context = nullptr;
     inside_compositor = was_inside_compositor;
@@ -711,20 +805,38 @@ void* WINAPI hooked_bink_buffer_open(HWND window, std::uint32_t width, std::uint
     last_bink_output_height = static_cast<std::uint32_t>(MulDiv(
         static_cast<int>(height), output_viewport.height, 480));
     if (buffer) {
-        if (!real_bink_buffer_set_scale(buffer, last_bink_output_width, last_bink_output_height))
+        active_bink_buffer = buffer;
+        active_bink_canvas_x = std::max(0, (640 - static_cast<int>(width)) / 2);
+        active_bink_canvas_y = std::max(0, (480 - static_cast<int>(height)) / 2);
+        last_bink_destination = nullptr;
+        last_bink_pitch = 0;
+        last_bink_copy_height = 0;
+        last_bink_copy_flags = 0;
+        last_bink_copy_x = 0;
+        last_bink_copy_y = 0;
+        artificial_bink_lock = false;
+        if (!g_config.crt_enabled &&
+            !real_bink_buffer_set_scale(buffer, last_bink_output_width, last_bink_output_height))
             fatal_graphics("Native Bink rejected the proportional FMV scale. The game will not continue with misaligned video.");
-        log_line("Bink movie opened buffer=%p source=%ux%u output=%ux%u",
-                 buffer, width, height, last_bink_output_width, last_bink_output_height);
+        log_line("Bink movie opened buffer=%p source=%ux%u output=%ux%u presentation=%s",
+                 buffer, width, height, last_bink_output_width, last_bink_output_height,
+                 g_config.crt_enabled ? "native-canvas-crt" : "native-scaled-blit");
     }
     return buffer;
 }
 
 int WINAPI hooked_bink_buffer_set_offset(void* buffer, int x, int y) {
+    if (buffer == active_bink_buffer) {
+        active_bink_canvas_x = x;
+        active_bink_canvas_y = y;
+    }
     last_bink_output_x = output_viewport.x + MulDiv(x, output_viewport.width, 640);
     last_bink_output_y = output_viewport.y + MulDiv(y, output_viewport.height, 480);
     log_line("Bink movie offset buffer=%p source=%d,%d output=%d,%d", buffer, x, y,
              last_bink_output_x, last_bink_output_y);
-    return real_bink_buffer_set_offset(buffer, last_bink_output_x, last_bink_output_y);
+    return g_config.crt_enabled
+        ? real_bink_buffer_set_offset(buffer, x, y)
+        : real_bink_buffer_set_offset(buffer, last_bink_output_x, last_bink_output_y);
 }
 
 void* WINAPI hooked_bink_open(const char* filename, std::uint32_t flags) {
@@ -746,6 +858,19 @@ void* WINAPI hooked_bink_open(const char* filename, std::uint32_t flags) {
         active_bink_do_frames = 0;
         active_bink_copies = 0;
         active_bink_next_frames = 0;
+        active_bink_presented_frames = 0;
+        active_bink_suppressed_blits = 0;
+        active_bink_buffer = nullptr;
+        artificial_bink_lock = false;
+        alternate_bink_frame_pending = false;
+        last_bink_source_width = 0;
+        last_bink_source_height = 0;
+        last_bink_output_width = 0;
+        last_bink_output_height = 0;
+        last_bink_destination = nullptr;
+        last_bink_pitch = 0;
+        last_bink_copy_height = 0;
+        last_bink_copy_flags = 0;
         log_line("FMV ledger serial=%u event=open id=%d movie=%p",
                  active_bink_request_serial, active_bink_request_id, bink);
     }
@@ -814,15 +939,313 @@ std::uint32_t WINAPI hooked_bink_do_frame(void* bink) {
 std::uint32_t WINAPI hooked_bink_copy_to_buffer(
     void* bink, void* destination, std::int32_t pitch, std::uint32_t height,
     std::uint32_t x, std::uint32_t y, std::uint32_t flags) {
-    const std::uint32_t result = real_bink_copy_to_buffer(
-        bink, destination, pitch, height, x, y, flags);
-    if (bink == active_bink_movie) {
-        ++active_bink_copies;
-        if (active_bink_copies <= 8 || active_bink_copies % 120 == 0)
-            log_line("BinkCopyToBuffer movie=%p count=%u destination=%p pitch=%d height=%u offset=%u,%u flags=%08X result=%u",
-                     bink, active_bink_copies, destination, pitch, height, x, y, flags, result);
+    if (!g_config.crt_enabled)
+        return real_bink_copy_to_buffer(bink, destination, pitch, height, x, y, flags);
+    if (bink != active_bink_movie || pitch == 0 || height == 0) {
+        log_line("CRT Bink copy precondition rejected movie=%p active_movie=%p active_buffer=%p destination=%p pitch=%d height=%u offset=%u,%u flags=%08X",
+                 bink, active_bink_movie, active_bink_buffer, destination, pitch, height,
+                 x, y, flags);
+        fatal_graphics("CRT Bink decoding encountered an untracked movie or invalid destination geometry.");
     }
+    if (last_bink_source_width == 0) {
+        if (IsBadReadPtr(bink, sizeof(std::uint32_t)))
+            fatal_graphics("CRT Bink decoding could not read the native movie width.");
+        last_bink_source_width = *static_cast<const std::uint32_t*>(bink);
+        last_bink_source_height = height;
+        active_bink_canvas_x = std::max(0, (640 - static_cast<int>(last_bink_source_width)) / 2);
+        active_bink_canvas_y = std::max(0, (480 - static_cast<int>(height)) / 2);
+        last_bink_output_width = static_cast<std::uint32_t>(MulDiv(
+            static_cast<int>(last_bink_source_width), output_viewport.width, 640));
+        last_bink_output_height = static_cast<std::uint32_t>(MulDiv(
+            static_cast<int>(height), output_viewport.height, 480));
+        last_bink_output_x = output_viewport.x +
+            MulDiv(active_bink_canvas_x, output_viewport.width, 640);
+        last_bink_output_y = output_viewport.y +
+            MulDiv(active_bink_canvas_y, output_viewport.height, 480);
+        log_line("Bink geometry recovered from decoded frame source=%ux%u canvas=%d,%d output=%ux%u at %d,%d",
+                 last_bink_source_width, height, active_bink_canvas_x, active_bink_canvas_y,
+                 last_bink_output_width, last_bink_output_height,
+                 last_bink_output_x, last_bink_output_y);
+    }
+    if (last_bink_source_width == 0 || last_bink_source_width > 4096 ||
+        std::abs(static_cast<long long>(pitch)) <
+            static_cast<long long>(last_bink_source_width) * 3) {
+        fatal_graphics("CRT Bink decoding rejected the native movie width or pitch.");
+    }
+    const auto row_bytes = static_cast<std::size_t>(
+        std::abs(static_cast<long long>(pitch)));
+    if (row_bytes > 16 * 1024 * 1024 || height > 4096 ||
+        row_bytes * static_cast<std::size_t>(height) > 64 * 1024 * 1024) {
+        fatal_graphics("CRT Bink decoding refused an unreasonable destination buffer size.");
+    }
+    if (!active_bink_buffer) {
+        if (alternate_bink_frame_pending)
+            fatal_graphics("The native OpenGL Bink backend decoded a second frame before presenting the first.");
+        const std::uint32_t result = real_bink_copy_to_buffer(
+            bink, destination, pitch, height, x, y, flags);
+        ++active_bink_copies;
+        last_bink_destination = static_cast<const std::uint8_t*>(destination);
+        last_bink_pitch = pitch;
+        last_bink_copy_height = height;
+        last_bink_copy_flags = flags;
+        last_bink_copy_x = x;
+        last_bink_copy_y = y;
+        alternate_bink_frame_pending = true;
+        if (active_bink_copies <= 8 || active_bink_copies % 120 == 0)
+            log_line("BinkCopyToBuffer native-OpenGL movie=%p count=%u destination=%p pitch=%d height=%u offset=%u,%u flags=%08X result=%u",
+                     bink, active_bink_copies, destination, pitch, height, x, y, flags,
+                     result);
+        return result;
+    }
+    bink_decode_storage.assign(row_bytes * height, 0);
+    auto* decode_destination = bink_decode_storage.data();
+    if (pitch < 0) decode_destination += row_bytes * (height - 1);
+    const std::uint32_t result = real_bink_copy_to_buffer(
+        bink, decode_destination, pitch, height, x, y, flags);
+    ++active_bink_copies;
+    last_bink_destination = decode_destination;
+    last_bink_pitch = pitch;
+    last_bink_copy_height = height;
+    last_bink_copy_flags = flags;
+    last_bink_copy_x = x;
+    last_bink_copy_y = y;
+    if (active_bink_copies <= 8 || active_bink_copies % 120 == 0)
+        log_line("BinkCopyToBuffer redirected movie=%p count=%u native_destination=%p decode_destination=%p pitch=%d height=%u offset=%u,%u flags=%08X result=%u",
+                 bink, active_bink_copies, destination, decode_destination, pitch, height, x, y,
+                 flags, result);
     return result;
+}
+
+void present_decoded_bink_frame(void* buffer) {
+    if (!crt_ready || !framebuffer_ready || buffer != active_bink_buffer ||
+        !last_bink_destination || last_bink_source_width == 0 || last_bink_copy_height == 0 ||
+        last_bink_copy_x != 0 || last_bink_copy_y != 0 ||
+        wglGetCurrentContext() != game_context) {
+        fatal_graphics("CRT movie presentation was requested without a complete current OpenGL/Bink frame. Native blitting was not used as a fallback.");
+    }
+    if (!copy_bink_frame_to_rgba_canvas(
+            {last_bink_destination, last_bink_pitch,
+             static_cast<int>(last_bink_source_width), static_cast<int>(last_bink_copy_height),
+             last_bink_copy_flags},
+            640, 480, active_bink_canvas_x, active_bink_canvas_y, bink_canvas_rgba)) {
+        log_line("unsupported Bink frame buffer=%p destination=%p size=%ux%u pitch=%d copy=%u,%u canvas=%d,%d flags=%08X",
+                 buffer, last_bink_destination, last_bink_source_width, last_bink_copy_height,
+                 last_bink_pitch, last_bink_copy_x, last_bink_copy_y,
+                 active_bink_canvas_x, active_bink_canvas_y,
+                 last_bink_copy_flags);
+        fatal_graphics("The decoded Bink frame format or placement is unsupported. Native blitting was not used as a fallback.");
+    }
+
+    inside_compositor = true;
+    glPushAttrib(GL_ALL_ATTRIB_BITS);
+    glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS);
+    GLint previous_program = 0;
+    glGetIntegerv(GL_CURRENT_PROGRAM, &previous_program);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
+    glDisable(GL_ALPHA_TEST);
+    glDisable(GL_CULL_FACE);
+    glDisable(GL_COLOR_LOGIC_OP);
+    glDisable(GL_POLYGON_STIPPLE);
+    glDisable(GL_POLYGON_OFFSET_FILL);
+    glDisable(GL_POLYGON_OFFSET_LINE);
+    glDisable(GL_POLYGON_OFFSET_POINT);
+    glDisable(GL_FOG);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_SCISSOR_TEST);
+    glDisable(GL_FRAMEBUFFER_SRGB);
+    glDisable(GL_CLIP_PLANE0);
+    glDisable(GL_CLIP_PLANE1);
+    glDisable(GL_CLIP_PLANE2);
+    glDisable(GL_CLIP_PLANE3);
+    glDisable(GL_CLIP_PLANE4);
+    glDisable(GL_CLIP_PLANE5);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    active_texture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, bink_canvas_texture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    while (glGetError() != GL_NO_ERROR) {}
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 640, 480, GL_RGBA, GL_UNSIGNED_BYTE,
+                    bink_canvas_rgba.data());
+    if (glGetError() != GL_NO_ERROR)
+        fatal_graphics("The decoded Bink frame could not be uploaded to the CRT canvas.");
+    if (!present_crt_texture(bink_canvas_texture, 640, 480, g_config.deband))
+        fatal_graphics("CRT movie composition failed. Native blitting was not used as a fallback.");
+
+    DWORD capture_requests = static_cast<DWORD>(InterlockedExchange(&capture_request_flags, 0));
+    if (g_config.development_capture && (GetAsyncKeyState(VK_F10) & 1))
+        capture_requests |= renderer_capture_output;
+    if (capture_requests & renderer_capture_output)
+        capture_frame("output", 0, GL_BACK, monitor_rect.right - monitor_rect.left,
+                      monitor_rect.bottom - monitor_rect.top);
+
+    use_program(static_cast<GLuint>(previous_program));
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glPopClientAttrib();
+    glPopAttrib();
+    HDC dc = GetDC(game_window);
+    const BOOL presented = dc ? real_swap_buffers(dc) : FALSE;
+    if (dc) ReleaseDC(game_window, dc);
+    bind_framebuffer(GL_FRAMEBUFFER, multisample_fbo);
+    inside_compositor = false;
+    if (!presented)
+        fatal_graphics("CRT movie SwapBuffers failed. Native blitting was not used as a fallback.");
+
+    ++bink_presented_frames;
+    ++bink_native_blits_suppressed;
+    ++active_bink_presented_frames;
+    ++active_bink_suppressed_blits;
+    if (active_bink_presented_frames <= 8 || active_bink_presented_frames % 120 == 0)
+        log_line("Bink frame explicit-present buffer=%p presented=%u format=%u pitch=%d",
+                 buffer, active_bink_presented_frames,
+                 last_bink_copy_flags & bink_surface_mask, last_bink_pitch);
+}
+
+void WINAPI hooked_bink_buffer_unlock(void* buffer) {
+    if (!g_config.crt_enabled) {
+        real_bink_buffer_unlock(buffer);
+        return;
+    }
+    if (buffer != active_bink_buffer)
+        fatal_graphics("CRT Bink unlock encountered an untracked presentation buffer.");
+    if (!artificial_bink_lock)
+        fatal_graphics("CRT Bink unlock encountered a buffer that was not logically locked.");
+    artificial_bink_lock = false;
+    if (active_bink_presented_frames == active_bink_copies) {
+        log_line("BinkBufferUnlock ignored buffer=%p reason=no-new-decoded-frame", buffer);
+        return;
+    }
+    if (active_bink_presented_frames + 1 != active_bink_copies)
+        fatal_graphics("CRT Bink frame lifecycle lost synchronization before presentation.");
+    present_decoded_bink_frame(buffer);
+}
+
+int WINAPI hooked_bink_buffer_lock(void* buffer) {
+    if (!g_config.crt_enabled) return real_bink_buffer_lock(buffer);
+    if (!active_bink_buffer) active_bink_buffer = buffer;
+    if (active_bink_copies < 8)
+        log_line("BinkBufferLock logical buffer=%p active=%p locked=%d",
+                 buffer, active_bink_buffer, artificial_bink_lock ? 1 : 0);
+    if (buffer != active_bink_buffer || artificial_bink_lock)
+        fatal_graphics("CRT Bink lock encountered an invalid or already locked presentation buffer.");
+    artificial_bink_lock = true;
+    return 1;
+}
+
+bool install_native_movie_frame_hook() {
+#ifdef AITD4_TEST_HARNESS
+    log_line("native Bink movie-frame callsite hook skipped in test harness");
+    return true;
+#else
+    auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
+    auto* call = image + 0x9DF37;
+    auto* native_frame = image + 0x9E0A2;
+    constexpr std::uint8_t expected_call[5]{0xE8, 0x66, 0x01, 0x00, 0x00};
+    constexpr std::uint8_t expected_frame_prefix[23]{
+        0x55, 0x8B, 0xEC, 0x8B, 0x45, 0x08, 0x50, 0xFF, 0x15, 0x38, 0xB2, 0x4B,
+        0x00, 0x8B, 0x4D, 0x0C, 0x51, 0xFF, 0x15, 0x2C, 0xB2, 0x4B, 0x00};
+    constexpr std::uint8_t expected_frame_tail[18]{
+        0x8B, 0x55, 0x08, 0x8B, 0x45, 0x08, 0x8B, 0x4A, 0x0C,
+        0x3B, 0x48, 0x08, 0x74, 0x0A, 0x8B, 0x55, 0x08, 0x52};
+    if (std::memcmp(call, expected_call, sizeof(expected_call)) != 0 ||
+        std::memcmp(native_frame, expected_frame_prefix, sizeof(expected_frame_prefix)) != 0 ||
+        std::memcmp(native_frame + 0x72, expected_frame_tail, sizeof(expected_frame_tail)) != 0) {
+        log_line("native Bink movie-frame signature mismatch call=%p frame=%p", call,
+                 native_frame);
+        return false;
+    }
+    real_native_movie_frame = reinterpret_cast<NativeMovieFrameFn>(native_frame);
+    std::uint8_t replacement[5]{0xE8};
+    const auto displacement = static_cast<std::int32_t>(
+        reinterpret_cast<std::intptr_t>(hooked_native_movie_frame) -
+        (reinterpret_cast<std::intptr_t>(call) + 5));
+    std::memcpy(replacement + 1, &displacement, sizeof(displacement));
+    if (!write_code_patch(call, replacement, sizeof(replacement))) return false;
+    log_line("native Bink movie-frame lifecycle hooked call=%p original=%p", call,
+             native_frame);
+    return true;
+#endif
+}
+
+void __cdecl hooked_native_movie_frame(void* bink, void* buffer) {
+    if (!g_config.crt_enabled) {
+        if (!real_native_movie_frame)
+            fatal_graphics("The native Bink movie-frame routine is unavailable.");
+        real_native_movie_frame(bink, buffer);
+        return;
+    }
+    if (!bink || bink != active_bink_movie || !buffer ||
+        IsBadReadPtr(bink, 0x10) || IsBadReadPtr(buffer, 0x1C)) {
+        log_line("CRT native movie-frame precondition rejected movie=%p active_movie=%p buffer=%p",
+                 bink, active_bink_movie, buffer);
+        fatal_graphics("CRT movie presentation received invalid native movie state.");
+    }
+    if (active_bink_buffer && active_bink_buffer != buffer)
+        fatal_graphics("CRT movie presentation changed native Bink buffers during playback.");
+    active_bink_buffer = buffer;
+
+    hooked_bink_do_frame(bink);
+    const int locked = real_bink_buffer_lock(buffer);
+    bool decoded = false;
+    if (locked) {
+        auto* bytes = static_cast<std::uint8_t*>(buffer);
+        const std::uint32_t height = *reinterpret_cast<const std::uint32_t*>(bytes + 0x04);
+        const std::uint32_t flags = *reinterpret_cast<const std::uint32_t*>(bytes + 0x10);
+        void* destination = *reinterpret_cast<void* const*>(bytes + 0x14);
+        const std::int32_t pitch = *reinterpret_cast<const std::int32_t*>(bytes + 0x18);
+        hooked_bink_copy_to_buffer(bink, destination, pitch, height, 0, 0, flags);
+        real_bink_buffer_unlock(buffer);
+        decoded = true;
+    }
+
+    auto* movie_bytes = static_cast<const std::uint8_t*>(bink);
+    const std::uint32_t frame = *reinterpret_cast<const std::uint32_t*>(movie_bytes + 0x0C);
+    const std::uint32_t frames = *reinterpret_cast<const std::uint32_t*>(movie_bytes + 0x08);
+    const std::uint32_t flags = *reinterpret_cast<const std::uint32_t*>(
+        static_cast<const std::uint8_t*>(buffer) + 0x10);
+    // Preserve the native dirty-rectangle query even though its direct window blit is suppressed.
+    real_bink_get_rects(bink, flags);
+    if (decoded) {
+        // This is the exact point where the native routine would issue BinkBufferBlit.
+        present_decoded_bink_frame(buffer);
+    } else {
+        ++bink_native_blits_suppressed;
+        ++active_bink_suppressed_blits;
+        log_line("native Bink buffer lock returned no frame movie=%p buffer=%p", bink, buffer);
+    }
+    if (frame != frames) hooked_bink_next_frame(bink);
+}
+
+#ifdef AITD4_TEST_HARNESS
+extern "C" __declspec(dllexport) DWORD WINAPI AITD4_TestNativeMovieFrame(
+    void* bink, void* buffer) {
+    hooked_native_movie_frame(bink, buffer);
+    return 1;
+}
+#endif
+
+void WINAPI hooked_bink_buffer_blit(void* buffer, void* rectangles,
+                                    std::uint32_t rectangle_count) {
+    if (!g_config.crt_enabled) {
+        real_bink_buffer_blit(buffer, rectangles, rectangle_count);
+        return;
+    }
+    if (buffer != active_bink_buffer)
+        fatal_graphics("CRT Bink blit encountered an untracked presentation buffer.");
+    log_line("BinkBufferBlit suppressed after explicit unlock presentation buffer=%p rectangles=%p count=%u",
+             buffer, rectangles, rectangle_count);
 }
 
 void WINAPI hooked_bink_next_frame(void* bink) {
@@ -838,15 +1261,20 @@ void WINAPI hooked_bink_close(void* bink) {
     if (bink == active_bink_movie) {
         log_line("FMV ledger serial=%u event=close id=%d movie=%p",
                  active_bink_request_serial, active_bink_request_id, bink);
-        log_line("FMV ledger serial=%u event=frames id=%d do=%u copy=%u next=%u",
-                 active_bink_request_serial, active_bink_request_id, active_bink_do_frames,
-                 active_bink_copies, active_bink_next_frames);
+        log_line("FMV ledger serial=%u event=frames id=%d do=%u copy=%u next=%u presented=%u suppressed=%u",
+                  active_bink_request_serial, active_bink_request_id, active_bink_do_frames,
+                  active_bink_copies, active_bink_next_frames, active_bink_presented_frames,
+                  active_bink_suppressed_blits);
         log_line("BinkClose movie=%p request_id=%d do_frames=%u copies=%u next_frames=%u",
                  bink, active_bink_request_id, active_bink_do_frames, active_bink_copies,
                  active_bink_next_frames);
         active_bink_movie = nullptr;
         active_bink_request_id = -1;
         active_bink_request_serial = 0;
+        active_bink_buffer = nullptr;
+        last_bink_destination = nullptr;
+        artificial_bink_lock = false;
+        alternate_bink_frame_pending = false;
     } else {
         log_line("BinkClose movie=%p untracked", bink);
     }
@@ -869,7 +1297,10 @@ bool install_bink_hooks() {
         ::GetProcAddress(bink, "_BinkBufferSetScale@12"));
     real_bink_get_error = reinterpret_cast<BinkGetErrorFn>(
         ::GetProcAddress(bink, "_BinkGetError@0"));
-    bool ok = real_bink_buffer_set_scale != nullptr && real_bink_get_error != nullptr;
+    real_bink_get_rects = reinterpret_cast<BinkGetRectsFn>(
+        ::GetProcAddress(bink, "_BinkGetRects@8"));
+    bool ok = real_bink_buffer_set_scale != nullptr && real_bink_get_error != nullptr &&
+              real_bink_get_rects != nullptr;
     ok &= patch_iat("binkw32.dll", "_BinkOpen@8",
                     reinterpret_cast<void*>(hooked_bink_open),
                     reinterpret_cast<void**>(&real_bink_open));
@@ -879,6 +1310,15 @@ bool install_bink_hooks() {
     ok &= patch_iat("binkw32.dll", "_BinkCopyToBuffer@28",
                     reinterpret_cast<void*>(hooked_bink_copy_to_buffer),
                     reinterpret_cast<void**>(&real_bink_copy_to_buffer));
+    ok &= patch_iat("binkw32.dll", "_BinkBufferBlit@12",
+                    reinterpret_cast<void*>(hooked_bink_buffer_blit),
+                    reinterpret_cast<void**>(&real_bink_buffer_blit));
+    ok &= patch_iat("binkw32.dll", "_BinkBufferLock@4",
+                    reinterpret_cast<void*>(hooked_bink_buffer_lock),
+                    reinterpret_cast<void**>(&real_bink_buffer_lock));
+    ok &= patch_iat("binkw32.dll", "_BinkBufferUnlock@4",
+                    reinterpret_cast<void*>(hooked_bink_buffer_unlock),
+                    reinterpret_cast<void**>(&real_bink_buffer_unlock));
     ok &= patch_iat("binkw32.dll", "_BinkNextFrame@4",
                     reinterpret_cast<void*>(hooked_bink_next_frame),
                     reinterpret_cast<void**>(&real_bink_next_frame));
@@ -891,6 +1331,7 @@ bool install_bink_hooks() {
     ok &= patch_iat("binkw32.dll", "_BinkBufferSetOffset@12",
                     reinterpret_cast<void*>(hooked_bink_buffer_set_offset),
                     reinterpret_cast<void**>(&real_bink_buffer_set_offset));
+    ok &= install_native_movie_frame_hook();
     bink_hooks_ready = ok;
     log_line("Bink proportional movie hooks %s", ok ? "ready" : "failed");
     return ok;
@@ -1126,6 +1567,255 @@ void main() {
     return true;
 }
 
+GLuint create_linked_program(const char* label, const char* vertex_source,
+                             const char* fragment_source) {
+    const GLuint vertex = compile_stage(GL_VERTEX_SHADER, vertex_source);
+    const GLuint fragment = compile_stage(GL_FRAGMENT_SHADER, fragment_source);
+    if (!vertex || !fragment) {
+        if (vertex) delete_shader(vertex);
+        if (fragment) delete_shader(fragment);
+        log_line("%s shader compilation failed", label);
+        return 0;
+    }
+    const GLuint program = create_program();
+    attach_shader(program, vertex);
+    attach_shader(program, fragment);
+    link_program(program);
+    delete_shader(vertex);
+    delete_shader(fragment);
+    GLint linked = 0;
+    get_program_iv(program, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        char info[2048]{};
+        GLsizei length = 0;
+        get_program_info_log(program, sizeof(info), &length, info);
+        log_line("%s shader link failed: %s", label, info);
+        delete_program(program);
+        return 0;
+    }
+    return program;
+}
+
+bool create_crt_programs() {
+    if (!g_config.crt_enabled) {
+        crt_ready = false;
+        return true;
+    }
+    static constexpr char vertex_source[] = R"GLSL(
+#version 120
+varying vec2 textureCoordinate;
+void main() {
+    gl_Position = gl_Vertex;
+    textureCoordinate = gl_MultiTexCoord0.xy;
+}
+)GLSL";
+    static constexpr char signal_fragment[] = R"GLSL(
+#version 120
+uniform sampler2D sourceTexture;
+uniform vec2 inverseSize;
+uniform float debandAmount;
+varying vec2 textureCoordinate;
+
+float toLinear(float encoded) {
+    return encoded <= 0.04045 ? encoded / 12.92
+                              : pow((encoded + 0.055) / 1.055, 2.4);
+}
+
+void main() {
+    vec3 center = texture2D(sourceTexture, textureCoordinate).rgb;
+    vec3 leftColor = texture2D(sourceTexture, textureCoordinate - vec2(inverseSize.x, 0.0)).rgb;
+    vec3 rightColor = texture2D(sourceTexture, textureCoordinate + vec2(inverseSize.x, 0.0)).rgb;
+    vec3 downColor = texture2D(sourceTexture, textureCoordinate - vec2(0.0, inverseSize.y)).rgb;
+    vec3 upColor = texture2D(sourceTexture, textureCoordinate + vec2(0.0, inverseSize.y)).rgb;
+    vec3 averageColor = (leftColor + rightColor + downColor + upColor) * 0.25;
+    vec3 localRange = max(max(abs(center - leftColor), abs(center - rightColor)),
+                          max(abs(center - downColor), abs(center - upColor)));
+    float difference = max(max(localRange.r, localRange.g), localRange.b);
+    float weight = 1.0 - smoothstep(1.0 / 255.0, 4.0 / 255.0, difference);
+    center = clamp(mix(center, averageColor, weight * 0.18 * debandAmount), 0.0, 1.0);
+    gl_FragColor = vec4(toLinear(center.r), toLinear(center.g), toLinear(center.b), 1.0);
+}
+)GLSL";
+    static constexpr char response_fragment[] = R"GLSL(
+#version 120
+uniform sampler2D sourceTexture;
+uniform vec2 signalSize;
+uniform float maskStrength;
+uniform float scanlineStrength;
+varying vec2 textureCoordinate;
+
+void main() {
+    vec3 color = texture2D(sourceTexture, textureCoordinate).rgb;
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    float rowPhase = fract(textureCoordinate.y * signalSize.y);
+    float trough = 0.5 - 0.5 * cos(rowPhase * 6.28318530718);
+    float beamLoss = mix(0.18, 0.09, clamp(sqrt(max(luma, 0.0)), 0.0, 1.0));
+    color *= 1.0 - scanlineStrength * beamLoss * trough;
+
+    float phase = mod(floor(gl_FragCoord.x), 3.0);
+    vec3 mask = vec3(1.0 - maskStrength);
+    if (phase < 0.5) mask.r = 1.0 + 2.0 * maskStrength;
+    else if (phase < 1.5) mask.g = 1.0 + 2.0 * maskStrength;
+    else mask.b = 1.0 + 2.0 * maskStrength;
+    gl_FragColor = vec4(max(color * mask, 0.0), 1.0);
+}
+)GLSL";
+    static constexpr char blur_fragment[] = R"GLSL(
+#version 120
+uniform sampler2D sourceTexture;
+uniform vec2 inverseSize;
+uniform vec2 blurDirection;
+uniform float extractHighlights;
+varying vec2 textureCoordinate;
+
+vec3 sourceSample(vec2 coordinate) {
+    vec3 color = texture2D(sourceTexture, coordinate).rgb;
+    if (extractHighlights > 0.5) {
+        float peak = max(max(color.r, color.g), color.b);
+        float weight = smoothstep(0.25, 0.85, peak);
+        color *= weight;
+    }
+    return color;
+}
+
+void main() {
+    vec2 stepVector = inverseSize * blurDirection;
+    vec3 color = sourceSample(textureCoordinate) * 0.2270270270;
+    color += sourceSample(textureCoordinate + stepVector * 1.3846153846) * 0.3162162162;
+    color += sourceSample(textureCoordinate - stepVector * 1.3846153846) * 0.3162162162;
+    color += sourceSample(textureCoordinate + stepVector * 3.2307692308) * 0.0702702703;
+    color += sourceSample(textureCoordinate - stepVector * 3.2307692308) * 0.0702702703;
+    gl_FragColor = vec4(color, 1.0);
+}
+)GLSL";
+    static constexpr char present_fragment[] = R"GLSL(
+#version 120
+uniform sampler2D sourceTexture;
+uniform sampler2D blurTexture;
+uniform float bloomStrength;
+uniform float halationStrength;
+uniform float ditherAmount;
+varying vec2 textureCoordinate;
+
+float toSrgb(float linearValue) {
+    linearValue = max(linearValue, 0.0);
+    return linearValue <= 0.0031308 ? linearValue * 12.92
+                                   : 1.055 * pow(linearValue, 1.0 / 2.4) - 0.055;
+}
+
+float hashNoise(vec2 position) {
+    return fract(52.9829189 * fract(dot(position, vec2(0.06711056, 0.00583715))));
+}
+
+void main() {
+    vec3 response = texture2D(sourceTexture, textureCoordinate).rgb;
+    vec3 blurred = texture2D(blurTexture, textureCoordinate).rgb;
+    vec3 halo = max(blurred - response * 0.35, 0.0);
+    vec3 linearColor = response + blurred * bloomStrength + halo * halationStrength;
+    vec3 encoded = vec3(toSrgb(linearColor.r), toSrgb(linearColor.g), toSrgb(linearColor.b));
+    float noise = hashNoise(gl_FragCoord.xy) - 0.5;
+    encoded += noise * (0.5 / 255.0) * ditherAmount;
+    gl_FragColor = vec4(clamp(encoded, 0.0, 1.0), 1.0);
+}
+)GLSL";
+
+    std::string vertex_override;
+    std::string signal_override;
+    std::string response_override;
+    std::string blur_override;
+    std::string present_override;
+    const char* selected_vertex = vertex_source;
+    const char* selected_signal = signal_fragment;
+    const char* selected_response = response_fragment;
+    const char* selected_blur = blur_fragment;
+    const char* selected_present = present_fragment;
+    if (g_config.development_hot_reload) {
+        vertex_override = read_shader_override("compositor.vert");
+        signal_override = read_shader_override("crt_signal.frag");
+        response_override = read_shader_override("crt_response.frag");
+        blur_override = read_shader_override("crt_blur.frag");
+        present_override = read_shader_override("crt_present.frag");
+        if (!vertex_override.empty()) selected_vertex = vertex_override.c_str();
+        if (!signal_override.empty()) selected_signal = signal_override.c_str();
+        if (!response_override.empty()) selected_response = response_override.c_str();
+        if (!blur_override.empty()) selected_blur = blur_override.c_str();
+        if (!present_override.empty()) selected_present = present_override.c_str();
+    }
+
+    const GLuint signal = create_linked_program("CRT signal", selected_vertex, selected_signal);
+    const GLuint response = create_linked_program("CRT response", selected_vertex, selected_response);
+    const GLuint blur = create_linked_program("CRT blur", selected_vertex, selected_blur);
+    const GLuint present = create_linked_program("CRT present", selected_vertex, selected_present);
+    if (!signal || !response || !blur || !present) {
+        if (signal) delete_program(signal);
+        if (response) delete_program(response);
+        if (blur) delete_program(blur);
+        if (present) delete_program(present);
+        return false;
+    }
+
+    const GLint signal_source = get_uniform_location(signal, "sourceTexture");
+    const GLint signal_inverse = get_uniform_location(signal, "inverseSize");
+    const GLint signal_deband = get_uniform_location(signal, "debandAmount");
+    const GLint response_source = get_uniform_location(response, "sourceTexture");
+    const GLint response_size = get_uniform_location(response, "signalSize");
+    const GLint response_mask = get_uniform_location(response, "maskStrength");
+    const GLint response_scanline = get_uniform_location(response, "scanlineStrength");
+    const GLint blur_source = get_uniform_location(blur, "sourceTexture");
+    const GLint blur_inverse = get_uniform_location(blur, "inverseSize");
+    const GLint blur_direction = get_uniform_location(blur, "blurDirection");
+    const GLint blur_extract = get_uniform_location(blur, "extractHighlights");
+    const GLint present_source = get_uniform_location(present, "sourceTexture");
+    const GLint present_blur = get_uniform_location(present, "blurTexture");
+    const GLint present_bloom = get_uniform_location(present, "bloomStrength");
+    const GLint present_halation = get_uniform_location(present, "halationStrength");
+    const GLint present_dither = get_uniform_location(present, "ditherAmount");
+    if (signal_source < 0 || signal_inverse < 0 || signal_deband < 0 ||
+        response_source < 0 || response_size < 0 || response_mask < 0 ||
+        response_scanline < 0 || blur_source < 0 || blur_inverse < 0 ||
+        blur_direction < 0 || blur_extract < 0 || present_source < 0 ||
+        present_blur < 0 || present_bloom < 0 || present_halation < 0 ||
+        present_dither < 0) {
+        log_line("CRT shader link omitted one or more required uniforms");
+        delete_program(signal);
+        delete_program(response);
+        delete_program(blur);
+        delete_program(present);
+        return false;
+    }
+
+    if (crt_signal_program) delete_program(crt_signal_program);
+    if (crt_response_program) delete_program(crt_response_program);
+    if (crt_blur_program) delete_program(crt_blur_program);
+    if (crt_present_program) delete_program(crt_present_program);
+    crt_signal_program = signal;
+    crt_response_program = response;
+    crt_blur_program = blur;
+    crt_present_program = present;
+    crt_signal_source_uniform = signal_source;
+    crt_signal_inverse_size_uniform = signal_inverse;
+    crt_signal_deband_uniform = signal_deband;
+    crt_response_source_uniform = response_source;
+    crt_response_signal_size_uniform = response_size;
+    crt_response_mask_uniform = response_mask;
+    crt_response_scanline_uniform = response_scanline;
+    crt_blur_source_uniform = blur_source;
+    crt_blur_inverse_size_uniform = blur_inverse;
+    crt_blur_direction_uniform = blur_direction;
+    crt_blur_extract_uniform = blur_extract;
+    crt_present_source_uniform = present_source;
+    crt_present_blur_uniform = present_blur;
+    crt_present_bloom_uniform = present_bloom;
+    crt_present_halation_uniform = present_halation;
+    crt_present_dither_uniform = present_dither;
+    log_line("CRT shaders ready signal=%s response=%s blur=%s present=%s",
+             signal_override.empty() ? "embedded" : "override",
+             response_override.empty() ? "embedded" : "override",
+             blur_override.empty() ? "embedded" : "override",
+             present_override.empty() ? "embedded" : "override");
+    return true;
+}
+
 bool capture_frame(const char* label, GLuint framebuffer, GLenum buffer, int width, int height) {
     if (width <= 0 || height <= 0) return false;
     const std::size_t pixel_count = static_cast<std::size_t>(width) * height;
@@ -1165,6 +1855,107 @@ bool capture_frame(const char* label, GLuint framebuffer, GLenum buffer, int wid
     log_line("capture %s label=%s size=%dx%d path=%s", written ? "saved" : "failed",
              label, width, height, path);
     return written;
+}
+
+bool create_color_target(int width, int height, GLenum internal_format,
+                         GLuint& framebuffer, GLuint& texture) {
+    gen_framebuffers(1, &framebuffer);
+    bind_framebuffer(GL_FRAMEBUFFER, framebuffer);
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, width, height, 0, GL_RGBA,
+                 internal_format == GL_RGBA16F ? GL_FLOAT : GL_UNSIGNED_BYTE, nullptr);
+    framebuffer_texture_2d(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
+    glDrawBuffer(GL_COLOR_ATTACHMENT0);
+    glReadBuffer(GL_COLOR_ATTACHMENT0);
+    return check_framebuffer_status(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+}
+
+void draw_fullscreen_quad() {
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f, 0.0f); glVertex2f(-1.0f, -1.0f);
+    glTexCoord2f(1.0f, 0.0f); glVertex2f(1.0f, -1.0f);
+    glTexCoord2f(1.0f, 1.0f); glVertex2f(1.0f, 1.0f);
+    glTexCoord2f(0.0f, 1.0f); glVertex2f(-1.0f, 1.0f);
+    glEnd();
+}
+
+bool present_crt_texture(GLuint input_texture, int input_width, int input_height,
+                         bool apply_deband) {
+    if (!crt_ready || !input_texture || input_width <= 0 || input_height <= 0) return false;
+    while (glGetError() != GL_NO_ERROR) {}
+    const int signal_width = g_config.crt_signal_width;
+    const int signal_height = g_config.crt_signal_height;
+    const int output_width = output_viewport.width;
+    const int output_height = output_viewport.height;
+    const int blur_width = std::max(1, output_width / 2);
+    const int blur_height = std::max(1, output_height / 2);
+
+    active_texture(GL_TEXTURE0);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, input_texture);
+    bind_framebuffer(GL_FRAMEBUFFER, crt_signal_fbo);
+    glViewport(0, 0, signal_width, signal_height);
+    use_program(crt_signal_program);
+    uniform_1i(crt_signal_source_uniform, 0);
+    uniform_2f(crt_signal_inverse_size_uniform, 1.0f / input_width, 1.0f / input_height);
+    uniform_1f(crt_signal_deband_uniform, apply_deband ? 1.0f : 0.0f);
+    draw_fullscreen_quad();
+
+    glBindTexture(GL_TEXTURE_2D, crt_signal_texture);
+    bind_framebuffer(GL_FRAMEBUFFER, crt_response_fbo);
+    glViewport(0, 0, output_width, output_height);
+    use_program(crt_response_program);
+    uniform_1i(crt_response_source_uniform, 0);
+    uniform_2f(crt_response_signal_size_uniform, static_cast<float>(signal_width),
+               static_cast<float>(signal_height));
+    uniform_1f(crt_response_mask_uniform, g_config.crt_mask_strength);
+    uniform_1f(crt_response_scanline_uniform, g_config.crt_scanline_strength);
+    draw_fullscreen_quad();
+
+    glBindTexture(GL_TEXTURE_2D, crt_response_texture);
+    bind_framebuffer(GL_FRAMEBUFFER, crt_blur_horizontal_fbo);
+    glViewport(0, 0, blur_width, blur_height);
+    use_program(crt_blur_program);
+    uniform_1i(crt_blur_source_uniform, 0);
+    uniform_2f(crt_blur_inverse_size_uniform, 1.0f / output_width, 1.0f / output_height);
+    uniform_2f(crt_blur_direction_uniform, 1.0f, 0.0f);
+    uniform_1f(crt_blur_extract_uniform, 1.0f);
+    draw_fullscreen_quad();
+
+    glBindTexture(GL_TEXTURE_2D, crt_blur_horizontal_texture);
+    bind_framebuffer(GL_FRAMEBUFFER, crt_blur_vertical_fbo);
+    glViewport(0, 0, blur_width, blur_height);
+    uniform_2f(crt_blur_inverse_size_uniform, 1.0f / blur_width, 1.0f / blur_height);
+    uniform_2f(crt_blur_direction_uniform, 0.0f, 1.0f);
+    uniform_1f(crt_blur_extract_uniform, 0.0f);
+    draw_fullscreen_quad();
+
+    bind_framebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, monitor_rect.right - monitor_rect.left,
+               monitor_rect.bottom - monitor_rect.top);
+    glDrawBuffer(GL_BACK);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glViewport(output_viewport.x, output_viewport.y, output_width, output_height);
+    active_texture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, crt_response_texture);
+    active_texture(GL_TEXTURE0 + 1);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, crt_blur_vertical_texture);
+    use_program(crt_present_program);
+    uniform_1i(crt_present_source_uniform, 0);
+    uniform_1i(crt_present_blur_uniform, 1);
+    uniform_1f(crt_present_bloom_uniform, g_config.crt_bloom_strength);
+    uniform_1f(crt_present_halation_uniform, g_config.crt_halation_strength);
+    uniform_1f(crt_present_dither_uniform, g_config.dither ? 1.0f : 0.0f);
+    draw_fullscreen_quad();
+    active_texture(GL_TEXTURE0);
+    return glGetError() == GL_NO_ERROR;
 }
 
 bool initialize_framebuffer() {
@@ -1257,9 +2048,41 @@ bool initialize_framebuffer() {
     glDrawBuffer(GL_COLOR_ATTACHMENT0);
     glReadBuffer(GL_COLOR_ATTACHMENT0);
     if (check_framebuffer_status(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE ||
-        !create_compositor_program()) {
+        !create_compositor_program() || !create_crt_programs()) {
         inside_compositor = false;
         return false;
+    }
+    if (g_config.crt_enabled) {
+        const int blur_width = std::max(1, output_viewport.width / 2);
+        const int blur_height = std::max(1, output_viewport.height / 2);
+        if (!create_color_target(g_config.crt_signal_width, g_config.crt_signal_height,
+                                 GL_RGBA16F, crt_signal_fbo, crt_signal_texture) ||
+            !create_color_target(output_viewport.width, output_viewport.height,
+                                 GL_RGBA16F, crt_response_fbo, crt_response_texture) ||
+            !create_color_target(blur_width, blur_height, GL_RGBA16F,
+                                 crt_blur_horizontal_fbo, crt_blur_horizontal_texture) ||
+            !create_color_target(blur_width, blur_height, GL_RGBA16F,
+                                 crt_blur_vertical_fbo, crt_blur_vertical_texture)) {
+            log_line("CRT framebuffer creation failed signal=%dx%d response=%dx%d blur=%dx%d",
+                     g_config.crt_signal_width, g_config.crt_signal_height,
+                     output_viewport.width, output_viewport.height, blur_width, blur_height);
+            inside_compositor = false;
+            return false;
+        }
+        glGenTextures(1, &bink_canvas_texture);
+        glBindTexture(GL_TEXTURE_2D, bink_canvas_texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 640, 480, 0, GL_RGBA,
+                     GL_UNSIGNED_BYTE, nullptr);
+        if (glGetError() != GL_NO_ERROR) {
+            log_line("CRT Bink canvas texture creation failed");
+            inside_compositor = false;
+            return false;
+        }
+        crt_ready = true;
     }
     bind_framebuffer(GL_FRAMEBUFFER, multisample_fbo);
     // This game does not reliably call glViewport after creating its context. The OpenGL
@@ -1273,9 +2096,10 @@ bool initialize_framebuffer() {
     inside_compositor = false;
     framebuffer_ready = true;
     game_context = wglGetCurrentContext();
-    log_line("OpenGL compositor ready version=%s logical=%dx%d physical=%dx%d samples=%d aniso=%.1f",
+    log_line("OpenGL compositor ready version=%s logical=%dx%d physical=%dx%d samples=%d aniso=%.1f crt=%d signal=%dx%d",
              version, width, height, monitor_rect.right - monitor_rect.left,
-             monitor_rect.bottom - monitor_rect.top, actual_samples, max_anisotropy);
+             monitor_rect.bottom - monitor_rect.top, actual_samples, max_anisotropy,
+             crt_ready ? 1 : 0, g_config.crt_signal_width, g_config.crt_signal_height);
     return true;
 }
 
@@ -1467,10 +2291,13 @@ void APIENTRY hooked_gl_tex_sub_image_2d(GLenum target, GLint level, GLint x, GL
 BOOL WINAPI hooked_swap_buffers(HDC dc) {
     if (!framebuffer_ready) return real_swap_buffers(dc);
     if (g_config.development_hot_reload && (GetAsyncKeyState(VK_F11) & 1)) {
-        reload_runtime_config();
-        if (swap_interval) swap_interval(g_config.vsync ? 1 : 0);
-        if (!create_compositor_program())
-            log_line("hot reload rejected; previous compositor program retained");
+        if (!reload_runtime_config()) {
+            log_line("hot reload rejected; configuration is invalid");
+        } else {
+            if (swap_interval) swap_interval(g_config.vsync ? 1 : 0);
+            if (!create_compositor_program() || !create_crt_programs())
+                log_line("hot reload rejected; one or more previous programs retained");
+        }
     }
     DWORD capture_requests = static_cast<DWORD>(InterlockedExchange(&capture_request_flags, 0));
     if (g_config.development_capture && (GetAsyncKeyState(VK_F9) & 1))
@@ -1533,28 +2360,33 @@ BOOL WINAPI hooked_swap_buffers(HDC dc) {
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
-    active_texture(GL_TEXTURE0);
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, resolve_texture);
-    use_program(compositor_program);
-    uniform_1i(source_uniform, 0);
-    uniform_2f(inverse_size_uniform, 1.0f / render_width,
-               1.0f / render_height);
-    uniform_1f(deband_uniform, g_config.deband ? 1.0f : 0.0f);
-    uniform_1f(dither_uniform, g_config.dither ? 1.0f : 0.0f);
+    if (g_config.crt_enabled) {
+        if (!present_crt_texture(resolve_texture, render_width, render_height, g_config.deband))
+            fatal_graphics("CRT gameplay composition failed. The game will not continue with a partial renderer.");
+    } else {
+        active_texture(GL_TEXTURE0);
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, resolve_texture);
+        use_program(compositor_program);
+        uniform_1i(source_uniform, 0);
+        uniform_2f(inverse_size_uniform, 1.0f / render_width,
+                   1.0f / render_height);
+        uniform_1f(deband_uniform, g_config.deband ? 1.0f : 0.0f);
+        uniform_1f(dither_uniform, g_config.dither ? 1.0f : 0.0f);
 
-    const float physical_width = static_cast<float>(monitor_rect.right - monitor_rect.left);
-    const float physical_height = static_cast<float>(monitor_rect.bottom - monitor_rect.top);
-    const float left = output_viewport.x / physical_width * 2.0f - 1.0f;
-    const float right = (output_viewport.x + output_viewport.width) / physical_width * 2.0f - 1.0f;
-    const float bottom = output_viewport.y / physical_height * 2.0f - 1.0f;
-    const float top = (output_viewport.y + output_viewport.height) / physical_height * 2.0f - 1.0f;
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.0f, 0.0f); glVertex2f(left, bottom);
-    glTexCoord2f(1.0f, 0.0f); glVertex2f(right, bottom);
-    glTexCoord2f(1.0f, 1.0f); glVertex2f(right, top);
-    glTexCoord2f(0.0f, 1.0f); glVertex2f(left, top);
-    glEnd();
+        const float physical_width = static_cast<float>(monitor_rect.right - monitor_rect.left);
+        const float physical_height = static_cast<float>(monitor_rect.bottom - monitor_rect.top);
+        const float left = output_viewport.x / physical_width * 2.0f - 1.0f;
+        const float right = (output_viewport.x + output_viewport.width) / physical_width * 2.0f - 1.0f;
+        const float bottom = output_viewport.y / physical_height * 2.0f - 1.0f;
+        const float top = (output_viewport.y + output_viewport.height) / physical_height * 2.0f - 1.0f;
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0f, 0.0f); glVertex2f(left, bottom);
+        glTexCoord2f(1.0f, 0.0f); glVertex2f(right, bottom);
+        glTexCoord2f(1.0f, 1.0f); glVertex2f(right, top);
+        glTexCoord2f(0.0f, 1.0f); glVertex2f(left, top);
+        glEnd();
+    }
 
     if (capture_output)
         capture_frame("output", 0, GL_BACK, monitor_rect.right - monitor_rect.left,
@@ -1568,6 +2400,17 @@ BOOL WINAPI hooked_swap_buffers(HDC dc) {
     glPopClientAttrib();
     glPopAttrib();
     const BOOL result = real_swap_buffers(dc);
+    if (alternate_bink_frame_pending) {
+        if (!result)
+            fatal_graphics("The native OpenGL Bink backend failed to present its CRT-composited frame.");
+        alternate_bink_frame_pending = false;
+        ++bink_presented_frames;
+        ++active_bink_presented_frames;
+        if (active_bink_presented_frames <= 8 || active_bink_presented_frames % 120 == 0)
+            log_line("native OpenGL Bink frame CRT-presented movie=%p presented=%u format=%u pitch=%d",
+                     active_bink_movie, active_bink_presented_frames,
+                     last_bink_copy_flags & bink_surface_mask, last_bink_pitch);
+    }
     bind_framebuffer(GL_FRAMEBUFFER, multisample_fbo);
     inside_compositor = false;
     return result;
@@ -1779,6 +2622,14 @@ bool get_renderer_diagnostics(RendererDiagnostics* diagnostics) {
     result.bink_output_height = last_bink_output_height;
     result.bink_output_x = last_bink_output_x;
     result.bink_output_y = last_bink_output_y;
+    result.crt_enabled = g_config.crt_enabled ? 1 : 0;
+    result.crt_ready = crt_ready ? 1 : 0;
+    result.crt_signal_width = g_config.crt_signal_width;
+    result.crt_signal_height = g_config.crt_signal_height;
+    result.bink_presented_frames = bink_presented_frames;
+    result.bink_native_blits_suppressed = bink_native_blits_suppressed;
+    result.bink_last_surface_format = last_bink_copy_flags & bink_surface_mask;
+    result.bink_last_pitch = last_bink_pitch;
     *diagnostics = result;
     return true;
 }

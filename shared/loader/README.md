@@ -21,7 +21,7 @@ Static verification:
 
 ```powershell
 .\verify.ps1 -ProxyPath ..\..\build\shared-loader\version.dll `
-  -GameExe 'D:\Games\Alone in the Dark - The New Nightmare\alone4.exe'
+  -GameExe 'C:\Games\Alone in the Dark - The New Nightmare\alone4.exe'
 ```
 
 The loader neither contains nor creates copyrighted assets. It is not an

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdarg>
 #include <cstdlib>
 #include <cstdio>
@@ -34,6 +35,18 @@ bool ini_bool(const char* path, const char* section, const char* key, bool fallb
     return GetPrivateProfileIntA(section, key, fallback ? 1 : 0, path) != 0;
 }
 
+float ini_float(const char* path, const char* section, const char* key, float fallback,
+                float minimum, float maximum) {
+    char value[64]{};
+    char fallback_text[32]{};
+    std::snprintf(fallback_text, sizeof(fallback_text), "%.6g", fallback);
+    GetPrivateProfileStringA(section, key, fallback_text, value, sizeof(value), path);
+    char* end = nullptr;
+    const float parsed = std::strtof(value, &end);
+    if (end == value || !std::isfinite(parsed)) return fallback;
+    return std::clamp(parsed, minimum, maximum);
+}
+
 void load_config_values() {
     g_config.logical_width = std::clamp(
         static_cast<int>(GetPrivateProfileIntA("Display", "LogicalWidth", 0, g_ini_path)),
@@ -54,13 +67,60 @@ void load_config_values() {
         ini_bool(g_ini_path, "Development", "HotReload", false);
     g_config.development_capture =
         ini_bool(g_ini_path, "Development", "Capture", false);
+    g_config.crt_enabled = ini_bool(g_ini_path, "CRT", "Enabled", true);
+    g_config.crt_signal_width = std::clamp(
+        static_cast<int>(GetPrivateProfileIntA("CRT", "SignalWidth", 640, g_ini_path)),
+        320, 1920);
+    g_config.crt_signal_height = std::clamp(
+        static_cast<int>(GetPrivateProfileIntA("CRT", "SignalHeight", 480, g_ini_path)),
+        240, 1440);
+    g_config.crt_mask_strength = ini_float(
+        g_ini_path, "CRT", "MaskStrength", 0.20f, 0.0f, 1.0f);
+    g_config.crt_scanline_strength = ini_float(
+        g_ini_path, "CRT", "ScanlineStrength", 0.25f, 0.0f, 1.0f);
+    g_config.crt_bloom_strength = ini_float(
+        g_ini_path, "CRT", "BloomStrength", 0.08f, 0.0f, 0.5f);
+    g_config.crt_halation_strength = ini_float(
+        g_ini_path, "CRT", "HalationStrength", 0.04f, 0.0f, 0.25f);
 #ifdef AITD4_TEST_HARNESS
     char test_value[32]{};
     if (GetEnvironmentVariableA("AITD4_TEST_LOGICAL_WIDTH", test_value, sizeof(test_value)))
         g_config.logical_width = std::clamp(std::atoi(test_value), 0, 16384);
     if (GetEnvironmentVariableA("AITD4_TEST_LOGICAL_HEIGHT", test_value, sizeof(test_value)))
         g_config.logical_height = std::clamp(std::atoi(test_value), 0, 16384);
+    if (GetEnvironmentVariableA("AITD4_TEST_CRT_ENABLED", test_value, sizeof(test_value)))
+        g_config.crt_enabled = std::atoi(test_value) != 0;
 #endif
+}
+
+bool validate_crt_config() {
+    if (!g_config.crt_enabled) return true;
+    if (static_cast<long long>(g_config.crt_signal_width) * 3 !=
+        static_cast<long long>(g_config.crt_signal_height) * 4) {
+        log_line("CRT signal geometry must be exact 4:3; requested=%dx%d",
+                 g_config.crt_signal_width, g_config.crt_signal_height);
+        return false;
+    }
+    char preset[32]{};
+    char mask_type[32]{};
+    GetPrivateProfileStringA("CRT", "Preset", "Faithful", preset, sizeof(preset), g_ini_path);
+    GetPrivateProfileStringA("CRT", "MaskType", "ApertureGrille", mask_type,
+                             sizeof(mask_type), g_ini_path);
+    if (_stricmp(preset, "Faithful") != 0 || _stricmp(mask_type, "ApertureGrille") != 0) {
+        log_line("unsupported CRT preset/mask preset=%s mask=%s", preset, mask_type);
+        return false;
+    }
+    const float curvature = ini_float(g_ini_path, "CRT", "Curvature", 0.0f, 0.0f, 1.0f);
+    const float overscan = ini_float(g_ini_path, "CRT", "Overscan", 0.0f, 0.0f, 1.0f);
+    const float aberration = ini_float(
+        g_ini_path, "CRT", "ChromaticAberration", 0.0f, 0.0f, 1.0f);
+    const float vignette = ini_float(g_ini_path, "CRT", "Vignette", 0.0f, 0.0f, 1.0f);
+    if (curvature != 0.0f || overscan != 0.0f || aberration != 0.0f || vignette != 0.0f) {
+        log_line("unsupported CRT distortion requested curvature=%.3f overscan=%.3f aberration=%.3f vignette=%.3f",
+                 curvature, overscan, aberration, vignette);
+        return false;
+    }
+    return true;
 }
 
 std::string sha256_file(const char* path) {
@@ -151,14 +211,18 @@ bool initialize_runtime(HMODULE self) {
         std::snprintf(g_ini_path, MAX_PATH, "%s\\aitd4-overhaul.ini", g_game_directory);
     load_config_values();
     log_line("renderer hook initializing module=%p ini=%s", self, g_ini_path);
-    return true;
+    return validate_crt_config();
 }
 
 bool reload_runtime_config() {
     const int active_logical_width = g_config.logical_width;
     const int active_logical_height = g_config.logical_height;
     const int active_msaa = g_config.msaa;
+    const bool active_crt_enabled = g_config.crt_enabled;
+    const int active_crt_signal_width = g_config.crt_signal_width;
+    const int active_crt_signal_height = g_config.crt_signal_height;
     load_config_values();
+    if (!validate_crt_config()) return false;
     if (g_config.logical_width != active_logical_width ||
         g_config.logical_height != active_logical_height || g_config.msaa != active_msaa) {
         log_line("logical resolution/MSAA changes require restart; active=%dx%d/%d requested=%dx%d/%d",
@@ -168,9 +232,23 @@ bool reload_runtime_config() {
         g_config.logical_height = active_logical_height;
         g_config.msaa = active_msaa;
     }
-    log_line("renderer configuration reloaded msaa=%d anisotropy=%d vsync=%d deband=%d dither=%d",
+    if (g_config.crt_enabled != active_crt_enabled ||
+        g_config.crt_signal_width != active_crt_signal_width ||
+        g_config.crt_signal_height != active_crt_signal_height) {
+        log_line("CRT enable/signal geometry changes require restart; active=%d/%dx%d requested=%d/%dx%d",
+                 active_crt_enabled ? 1 : 0, active_crt_signal_width, active_crt_signal_height,
+                 g_config.crt_enabled ? 1 : 0, g_config.crt_signal_width,
+                 g_config.crt_signal_height);
+        g_config.crt_enabled = active_crt_enabled;
+        g_config.crt_signal_width = active_crt_signal_width;
+        g_config.crt_signal_height = active_crt_signal_height;
+    }
+    log_line("renderer configuration reloaded msaa=%d anisotropy=%d vsync=%d deband=%d dither=%d crt=%d mask=%.3f scanline=%.3f bloom=%.3f halation=%.3f",
              g_config.msaa, g_config.anisotropy, g_config.vsync ? 1 : 0,
-             g_config.deband ? 1 : 0, g_config.dither ? 1 : 0);
+             g_config.deband ? 1 : 0, g_config.dither ? 1 : 0,
+             g_config.crt_enabled ? 1 : 0, g_config.crt_mask_strength,
+             g_config.crt_scanline_strength, g_config.crt_bloom_strength,
+             g_config.crt_halation_strength);
     return true;
 }
 
