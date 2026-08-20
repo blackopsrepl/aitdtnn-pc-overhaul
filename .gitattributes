@@ -11,3 +11,4 @@
 *.exe binary
 *.dll binary
 *.zip binary
+payload/game/Xidi.ini -text
