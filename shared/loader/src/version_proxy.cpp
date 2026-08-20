@@ -12,11 +12,17 @@
 namespace {
 
 constexpr unsigned char kSupportedEntrypointBytes[5] = {0x55, 0x8b, 0xec, 0x6a, 0xff};
-constexpr unsigned char kSupportedExeSha256[32] = {
+constexpr unsigned char kSupported15SlotExeSha256[32] = {
     0x56, 0x68, 0x11, 0x8e, 0x0e, 0x19, 0xd5, 0x69,
     0x98, 0x65, 0x00, 0xa1, 0xc8, 0x05, 0xa8, 0x53,
     0x97, 0xc8, 0x68, 0x1e, 0x7b, 0x67, 0x2b, 0x49,
     0xa6, 0x86, 0x45, 0x46, 0x2e, 0xcc, 0xc6, 0x72,
+};
+constexpr unsigned char kSupportedRetailExeSha256[32] = {
+    0x32, 0x09, 0x08, 0xaf, 0x4c, 0xe5, 0xc7, 0x24,
+    0xb6, 0x0a, 0x7e, 0xea, 0x6a, 0x5a, 0xad, 0xe7,
+    0x37, 0xd5, 0x1d, 0x65, 0xae, 0xe8, 0x50, 0x67,
+    0x44, 0xfc, 0xe6, 0xe6, 0xdd, 0x01, 0x43, 0xe0,
 };
 constexpr wchar_t kLogName[] = L"aitdtnn-overhaul-loader.log";
 constexpr wchar_t kAudioRelativePath[] =
@@ -231,14 +237,16 @@ extern "C" void RunEntrypointGate() noexcept {
     if (!hash_file(exe_path, actual_digest, &hash_error)) {
         fail_closed("Could not hash the running alone4.exe.", hash_error);
     }
-    if (std::memcmp(actual_digest, kSupportedExeSha256, sizeof(actual_digest)) != 0) {
+    if (std::memcmp(actual_digest, kSupported15SlotExeSha256, sizeof(actual_digest)) != 0 &&
+        std::memcmp(actual_digest, kSupportedRetailExeSha256, sizeof(actual_digest)) != 0) {
         char actual_hex[65]{};
         char message[256]{};
         digest_to_hex(actual_digest, actual_hex);
         sprintf_s(
             message,
             "Unsupported alone4.exe SHA-256: %s. Expected "
-            "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672.",
+            "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672 or "
+            "320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0.",
             actual_hex);
         fail_closed(message);
     }

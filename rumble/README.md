@@ -17,7 +17,9 @@ game, console executable, script, movie or other copyrighted asset.
 
 Supported executable SHA-256:
 
-`5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672`
+`5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672` (15-slot/no-CD)
+
+`320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0` (retail CD)
 
 Public initializer:
 

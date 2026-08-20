@@ -2,7 +2,7 @@
   "schema": 1,
   "id": "aitdtnn-pc-rumble",
   "name": "AITD:TNN Dreamcast Rumble Restoration",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "copyrighted_assets": false,
   "dreamcast_image_required": false,
   "shell_integration": false,
@@ -10,6 +10,10 @@
     {
       "name": "English 15-slot/no-CD",
       "sha256": "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672"
+    },
+    {
+      "name": "English retail CD",
+      "sha256": "320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0"
     }
   ],
   "load": {

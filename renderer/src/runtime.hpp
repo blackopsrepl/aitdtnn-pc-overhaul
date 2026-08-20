@@ -36,9 +36,18 @@ extern char g_game_directory[MAX_PATH];
 extern char g_module_directory[MAX_PATH];
 extern char g_ini_path[MAX_PATH];
 
+enum class ExecutableProfile {
+    unknown,
+    english_15_slot_no_cd,
+    english_retail_cd,
+};
+
+extern ExecutableProfile g_executable_profile;
+
 void log_line(const char* format, ...);
 bool initialize_runtime(HMODULE self);
 bool reload_runtime_config();
 bool validate_supported_executable();
+bool is_retail_executable();
 
 }  // namespace aitd4

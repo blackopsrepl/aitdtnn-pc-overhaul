@@ -14,7 +14,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$supportedExeHash = '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672'
+$supportedExeHashes = @(
+    '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672', # English 15-slot/no-CD
+    '320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0'  # English retail CD
+)
 $gameRoot = [IO.Path]::GetFullPath($GamePath.Trim().TrimEnd('\'))
 $appRoot = [IO.Path]::GetFullPath($AppPath.Trim().TrimEnd('\'))
 $audioRoot = Join-Path $gameRoot 'audio-restoration'
@@ -237,7 +240,7 @@ switch ($Mode) {
             throw "alone4.exe was not found in $gameRoot"
         }
         $actual = Get-Sha256 $exe
-        if ($actual -ne $supportedExeHash) {
+        if ($actual -notin $supportedExeHashes) {
             throw "Unsupported alone4.exe SHA-256: $actual"
         }
         if ((Test-Path -LiteralPath (Join-Path $appRoot 'ownership.json') -PathType Leaf) -or
@@ -309,10 +312,14 @@ switch ($Mode) {
         }
         New-Item -ItemType Directory -Path $appRoot -Force | Out-Null
         $ownedFiles = @(Get-OwnedFiles)
+        $installedExeHash = Get-Sha256 (Join-Path $gameRoot 'alone4.exe')
+        if ($installedExeHash -notin $supportedExeHashes) {
+            throw "Unsupported alone4.exe SHA-256 during install finalization: $installedExeHash"
+        }
         [ordered]@{
             format = 1
             installed_utc = [DateTime]::UtcNow.ToString('o')
-            game_executable_sha256 = $supportedExeHash
+            game_executable_sha256 = $installedExeHash
             files = $ownedFiles
         } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $appRoot 'ownership.json') -Encoding UTF8
         New-Item -ItemType Directory -Path (Split-Path -Parent $previous) -Force | Out-Null

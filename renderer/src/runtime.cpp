@@ -24,12 +24,15 @@ FILE* g_log = nullptr;
 char g_game_directory[MAX_PATH]{};
 char g_module_directory[MAX_PATH]{};
 char g_ini_path[MAX_PATH]{};
+ExecutableProfile g_executable_profile{ExecutableProfile::unknown};
 CRITICAL_SECTION g_log_lock{};
 
 namespace {
 
-constexpr char supported_sha256[] =
+constexpr char supported_15_slot_sha256[] =
     "5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672";
+constexpr char supported_retail_sha256[] =
+    "320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0";
 
 bool ini_bool(const char* path, const char* section, const char* key, bool fallback) {
     return GetPrivateProfileIntA(section, key, fallback ? 1 : 0, path) != 0;
@@ -262,16 +265,26 @@ bool validate_supported_executable() {
     }
 #endif
     const auto actual = sha256_file(exe_path);
-    if (actual != supported_sha256) {
-        log_line("unsupported executable sha256=%s expected=%s", actual.c_str(), supported_sha256);
+    if (actual == supported_15_slot_sha256) {
+        g_executable_profile = ExecutableProfile::english_15_slot_no_cd;
+    } else if (actual == supported_retail_sha256) {
+        g_executable_profile = ExecutableProfile::english_retail_cd;
+    } else {
+        log_line("unsupported executable sha256=%s", actual.c_str());
         MessageBoxA(nullptr,
                     "AITD4 renderer refused to patch an unsupported alone4.exe.\n"
                     "The game was not started and no fallback was used.",
                     "AITD4 renderer", MB_OK | MB_ICONERROR | MB_SYSTEMMODAL);
         return false;
     }
-    log_line("executable verified sha256=%s", actual.c_str());
+    log_line("executable verified profile=%s sha256=%s",
+             is_retail_executable() ? "english-retail-cd" : "english-15-slot-no-cd",
+             actual.c_str());
     return true;
+}
+
+bool is_retail_executable() {
+    return g_executable_profile == ExecutableProfile::english_retail_cd;
 }
 
 }  // namespace aitd4

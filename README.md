@@ -6,7 +6,7 @@ not support the Steam port. It keeps the original PC game, story, sound
 effects, movies and game data intact while restoring selected Dreamcast-era
 features and modernizing presentation and controller support.
 
-Current integrated version: **0.2.0**.
+Current integrated version: **0.3.0**.
 
 ## In-game preview
 
@@ -93,16 +93,16 @@ Rumble does not require a Dreamcast image at runtime.
 - An OpenGL-capable display driver. An Xbox/XInput-compatible controller is
   optional.
 
-This overhaul was tested against, and the installer supports, one exact
-original-PC executable: the English 15-slot/no-CD `alone4.exe` build. Its
-SHA-256 is:
+The installer supports two verified English original-PC executable profiles:
+the 15-slot/no-CD build and the retail CD build. Their SHA-256 values are:
 
 ```text
 5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672
+320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0
 ```
 
-Address-sensitive modules fail closed when the executable is not this supported
-build. This protects other versions from receiving incompatible runtime hooks.
+Address-sensitive modules fail closed when the executable is not one of these
+supported builds. This protects other versions from receiving incompatible runtime hooks.
 
 ## Installation
 

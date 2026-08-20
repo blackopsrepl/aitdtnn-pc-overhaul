@@ -24,13 +24,11 @@ using aitdtnn::rumble::kStopVibset;
 using aitdtnn::rumble::request_to_vibset;
 using aitdtnn::rumble::to_xinput_motor;
 
-using aitdtnn::rumble::kBackendRva;
-using aitdtnn::rumble::kEnableRva;
-using aitdtnn::rumble::kAvailableRva;
 using aitdtnn::rumble::kExpectedBackend;
 using aitdtnn::rumble::kExpectedEnable;
 using aitdtnn::rumble::kExpectedAvailable;
-using aitdtnn::rumble::kSupportedExeSha256;
+using aitdtnn::rumble::ExecutableProfile;
+using aitdtnn::rumble::kExecutableProfiles;
 constexpr wchar_t kConfigName[] = L"aitd4-rumble.ini";
 constexpr wchar_t kLogName[] = L"aitd4-rumble-hook.log";
 
@@ -71,6 +69,7 @@ unsigned char* g_backend_target = nullptr;
 unsigned char* g_available_target = nullptr;
 void** g_exit_process_slot = nullptr;
 ExitProcessFn g_real_exit_process = nullptr;
+const ExecutableProfile* g_profile = nullptr;
 
 bool module_directory(wchar_t* output, std::size_t capacity) noexcept {
     if (capacity == 0 || g_self == nullptr) return false;
@@ -156,11 +155,15 @@ bool validate_executable() noexcept {
         log_line("could not hash the running executable error=%lu", GetLastError());
         return false;
     }
-    if (std::memcmp(digest, kSupportedExeSha256, sizeof(digest)) != 0) {
-        log_line("unsupported alone4.exe SHA-256");
-        return false;
+    for (const auto& profile : kExecutableProfiles) {
+        if (std::memcmp(digest, profile.sha256, sizeof(digest)) == 0) {
+            g_profile = &profile;
+            log_line("executable profile=%s", profile.name);
+            return true;
+        }
     }
-    return true;
+    log_line("unsupported alone4.exe SHA-256");
+    return false;
 }
 
 void load_config() noexcept {
@@ -412,15 +415,17 @@ bool make_relative_jump(unsigned char* target, void* replacement,
 bool install_backend_hooks() noexcept {
     auto* base = reinterpret_cast<unsigned char*>(GetModuleHandleW(nullptr));
     if (base == nullptr) return false;
-    g_enable_target = base + kEnableRva;
-    g_backend_target = base + kBackendRva;
-    g_available_target = base + kAvailableRva;
+    if (g_profile == nullptr) return false;
+    g_enable_target = base + g_profile->enable_rva;
+    g_backend_target = base + g_profile->backend_rva;
+    g_available_target = base + g_profile->available_rva;
     if (std::memcmp(g_enable_target, kExpectedEnable, sizeof(kExpectedEnable)) != 0 ||
         std::memcmp(g_backend_target, kExpectedBackend, sizeof(kExpectedBackend)) != 0 ||
         std::memcmp(g_available_target, kExpectedAvailable,
                     sizeof(kExpectedAvailable)) != 0) {
         log_line("rumble platform-method signature mismatch enable=%08X set=%08X "
-                 "available=%08X", kEnableRva, kBackendRva, kAvailableRva);
+                 "available=%08X", g_profile->enable_rva, g_profile->backend_rva,
+                 g_profile->available_rva);
         return false;
     }
 
@@ -449,7 +454,8 @@ bool install_backend_hooks() noexcept {
         return false;
     }
     log_line("hooked PC vibration platform methods enable=%08X set=%08X "
-             "available=%08X", kEnableRva, kBackendRva, kAvailableRva);
+             "available=%08X", g_profile->enable_rva, g_profile->backend_rva,
+             g_profile->available_rva);
     return true;
 }
 

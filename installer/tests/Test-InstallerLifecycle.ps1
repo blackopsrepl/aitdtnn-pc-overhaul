@@ -15,7 +15,10 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$supportedHash = '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672'
+$supportedHashes = @(
+    '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672',
+    '320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0'
+)
 $setup = (Resolve-Path -LiteralPath $SetupPath).Path
 $sourceExe = (Resolve-Path -LiteralPath $GameExe).Path
 $image = (Resolve-Path -LiteralPath $DreamcastImage).Path
@@ -27,8 +30,9 @@ $controllerNames = @('dinput8.dll', 'winmm.dll', 'Xidi.32.dll', 'Xidi.ini', 'key
 if ([IO.Path]::GetFileName($testRoot) -notlike 'aitdtnn-installer-lifecycle-*') {
     throw "ScratchRoot must end in an aitdtnn-installer-lifecycle-* directory: $testRoot"
 }
-if ((Get-FileHash -LiteralPath $sourceExe -Algorithm SHA256).Hash -ne $supportedHash) {
-    throw 'GameExe is not the exact supported executable.'
+$sourceHash = (Get-FileHash -LiteralPath $sourceExe -Algorithm SHA256).Hash
+if ($sourceHash -notin $supportedHashes) {
+    throw 'GameExe is not one of the exact supported executables.'
 }
 if (Get-Process -Name alone4 -ErrorAction SilentlyContinue) {
     throw 'Close alone4.exe before running the installer lifecycle test.'
@@ -94,7 +98,7 @@ function Assert-PreviousStack {
         Assert-True ($value -eq "prior-$name") "Previous $name was not restored."
     }
     Assert-True (((Get-FileHash -LiteralPath (Join-Path $testRoot 'alone4.exe') `
-        -Algorithm SHA256).Hash) -eq $supportedHash) 'alone4.exe changed.'
+        -Algorithm SHA256).Hash) -eq $sourceHash) 'alone4.exe changed.'
 }
 
 function Assert-WorkingPayload {

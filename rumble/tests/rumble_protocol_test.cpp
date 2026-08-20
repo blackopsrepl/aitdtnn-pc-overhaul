@@ -45,6 +45,11 @@ int main() {
     static_assert(kEnableRva == 0x000a436cu);
     static_assert(kBackendRva == 0x000a4379u);
     static_assert(kAvailableRva == 0x000a439fu);
+    static_assert(std::size(kExecutableProfiles) == 2);
+    static_assert(kExecutableProfiles[0].enable_rva == kEnableRva);
+    static_assert(kExecutableProfiles[1].enable_rva == 0x000a420cu);
+    static_assert(kExecutableProfiles[1].backend_rva == 0x000a4219u);
+    static_assert(kExecutableProfiles[1].available_rva == 0x000a423fu);
     static_assert(sizeof(kExpectedEnable) == 13);
     static_assert(sizeof(kExpectedBackend) == 15);
     static_assert(sizeof(kExpectedAvailable) == 13);

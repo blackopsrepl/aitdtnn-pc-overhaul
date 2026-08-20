@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.2.0"
+  #define MyAppVersion "0.3.0"
 #endif
 
 [Setup]
@@ -65,7 +65,8 @@ Source: "..\third_party\Xidi-v5.0.0\README.md"; DestDir: "{app}\licenses"; DestN
 
 [Code]
 const
-  SupportedExeHash = '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672';
+  Supported15SlotExeHash = '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672';
+  SupportedRetailExeHash = '320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0';
 
 var
   GamePage: TInputDirWizardPage;
@@ -151,7 +152,8 @@ end;
 function ExactExecutableSupported: Boolean;
 begin
   Result := FileExists(GetGameExe('')) and
-    (CompareText(GetSHA256OfFile(GetGameExe('')), SupportedExeHash) = 0);
+    ((CompareText(GetSHA256OfFile(GetGameExe('')), Supported15SlotExeHash) = 0) or
+     (CompareText(GetSHA256OfFile(GetGameExe('')), SupportedRetailExeHash) = 0));
 end;
 
 procedure InitializeWizard;

@@ -599,11 +599,11 @@ std::uint32_t __fastcall hooked_get_new_pressed(void* input_state, void*) {
 
 void __cdecl hooked_character_select_advance() {
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* selection_state = reinterpret_cast<std::uint32_t*>(image + 0x102B64);
+    auto* selection_state = reinterpret_cast<std::uint32_t*>(image + (is_retail_executable() ? 0x102A6C : 0x102B64));
     const std::uint32_t state_before = *selection_state;
     std::uint32_t selected_item = 0;
     if (state_before == 2) {
-        void* menu = *reinterpret_cast<void**>(image + 0x102B5C);
+        void* menu = *reinterpret_cast<void**>(image + (is_retail_executable() ? 0x102A64 : 0x102B5C));
         if (menu) selected_item = real_current_menu_item(menu);
     }
     real_character_select_advance();
@@ -611,7 +611,7 @@ void __cdecl hooked_character_select_advance() {
     const std::uint32_t state_after = *selection_state;
     if (state_before != 2 || state_after != 3) return;
 
-    auto* input_state = image + 0x1BDC08;
+    auto* input_state = image + (is_retail_executable() ? 0x1BDB08 : 0x1BDC08);
     auto* pressed = reinterpret_cast<std::uint32_t*>(input_state + 8);
     const std::uint32_t carried = *pressed & CutsceneInputGuard::action_mask;
     *pressed &= ~CutsceneInputGuard::action_mask;
@@ -633,9 +633,9 @@ void __cdecl hooked_character_select_advance() {
 int __cdecl hooked_post_selection_platform() {
     if (InterlockedCompareExchange(&post_selection_movie_in_flight, 1, 0) == 0) {
         auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-        const std::uint8_t character = *(image + 0x101758);
+        const std::uint8_t character = *(image + (is_retail_executable() ? 0x101658 : 0x101758));
         const int movie_id = CharacterSelectMovieGate::movie_for_character_byte(character);
-        auto* input_state = image + 0x1BDC08;
+        auto* input_state = image + (is_retail_executable() ? 0x1BDB08 : 0x1BDC08);
         auto* pressed = reinterpret_cast<std::uint32_t*>(input_state + 8);
         const std::uint32_t carried = *pressed & CutsceneInputGuard::action_mask;
         *pressed &= ~CutsceneInputGuard::action_mask;
@@ -661,39 +661,45 @@ bool install_cutscene_input_reuse_guard() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* getter = image + 0xA3E02;
-    auto* selection_call = image + 0x7FCE5;
-    auto* post_selection_call = image + 0xBAE94;
-    auto* post_selection_context = image + 0xBAE83;
-    auto* current_item = image + 0xA82D1;
-    auto* confirmation_branch = image + 0x7FD0E;
+    const bool retail = is_retail_executable();
+    auto* getter = image + (retail ? 0xA3CA2 : 0xA3E02);
+    auto* selection_call = image + (retail ? 0x7FA6F : 0x7FCE5);
+    auto* post_selection_call = image + (retail ? 0x79987 : 0xBAE94);
+    auto* post_selection_context = image + (retail ? 0x79976 : 0xBAE83);
+    auto* current_item = image + (retail ? 0xA8171 : 0xA82D1);
+    auto* confirmation_branch = image + (retail ? 0x7FA98 : 0x7FD0E);
     constexpr std::uint8_t expected_getter[5]{0x55, 0x8B, 0xEC, 0x51, 0x89};
-    constexpr std::uint8_t expected_selection_call[5]{0xE8, 0x75, 0xAE, 0xFF, 0xFF};
-    constexpr std::uint8_t expected_post_selection_context[29]{
+    constexpr std::uint8_t expected_selection_call_15_slot[5]{0xE8, 0x75, 0xAE, 0xFF, 0xFF};
+    constexpr std::uint8_t expected_selection_call_retail[5]{0xE8, 0xCB, 0xAF, 0xFF, 0xFF};
+    constexpr std::uint8_t expected_post_selection_context_15_slot[29]{
         0x8B, 0x4D, 0xF0, 0x81, 0xE1, 0xFF, 0x00, 0x00, 0x00, 0x85,
         0xC9, 0x0F, 0x84, 0xC1, 0xEC, 0xFB, 0xFF, 0xE8, 0x67, 0x8F,
         0xF4, 0xFF, 0x89, 0x45, 0xE4, 0x83, 0x7D, 0xE4, 0x01};
+    constexpr std::uint8_t expected_post_selection_context_retail[29]{
+        0x8B, 0x4D, 0xF0, 0x81, 0xE1, 0xFF, 0x00, 0x00, 0x00, 0x85,
+        0xC9, 0x0F, 0x84, 0xA9, 0x00, 0x00, 0x00, 0xE8, 0x74, 0xA4,
+        0xF8, 0xFF, 0x89, 0x45, 0xE4, 0x83, 0x7D, 0xE4, 0x01};
     constexpr std::uint8_t expected_current_item[8]{
         0x55, 0x8B, 0xEC, 0x51, 0x89, 0x4D, 0xFC, 0x8B};
-    constexpr std::uint8_t expected_confirmation_branch[16]{
+    constexpr std::uint8_t expected_confirmation_branch_15_slot[16]{
         0x8B, 0x0D, 0x5C, 0x2B, 0x50, 0x00, 0xE8, 0xB8,
         0x85, 0x02, 0x00, 0x3D, 0x01, 0x20, 0x00, 0x00};
+    constexpr std::uint8_t expected_confirmation_branch_retail[16]{
+        0x8B, 0x0D, 0x64, 0x2A, 0x50, 0x00, 0xE8, 0xCE,
+        0x86, 0x02, 0x00, 0x3D, 0x01, 0x20, 0x00, 0x00};
     if (std::memcmp(getter, expected_getter, sizeof(expected_getter)) != 0 ||
-        std::memcmp(selection_call, expected_selection_call,
-                    sizeof(expected_selection_call)) != 0 ||
-        std::memcmp(post_selection_context, expected_post_selection_context,
-                    sizeof(expected_post_selection_context)) != 0 ||
+        std::memcmp(selection_call, retail ? expected_selection_call_retail : expected_selection_call_15_slot, 5) != 0 ||
+        std::memcmp(post_selection_context, retail ? expected_post_selection_context_retail : expected_post_selection_context_15_slot, 29) != 0 ||
         std::memcmp(current_item, expected_current_item,
                     sizeof(expected_current_item)) != 0 ||
-        std::memcmp(confirmation_branch, expected_confirmation_branch,
-                    sizeof(expected_confirmation_branch)) != 0) {
+        std::memcmp(confirmation_branch, retail ? expected_confirmation_branch_retail : expected_confirmation_branch_15_slot, 16) != 0) {
         log_line("character-selection signature mismatch getter=%p confirm=%p post=%p item=%p branch=%p",
                  getter, selection_call, post_selection_call, current_item,
                  confirmation_branch);
         return false;
     }
 
-    real_character_select_advance = reinterpret_cast<CharacterSelectAdvanceFn>(image + 0x7AB5F);
+    real_character_select_advance = reinterpret_cast<CharacterSelectAdvanceFn>(image + (retail ? 0x7AA3F : 0x7AB5F));
     real_post_selection_platform = reinterpret_cast<PostSelectionPlatformFn>(image + 0x3E00);
     real_current_menu_item = reinterpret_cast<CurrentMenuItemFn>(current_item);
     std::uint8_t getter_jump[5]{0xE9};
@@ -729,7 +735,7 @@ bool install_cutscene_input_reuse_guard() {
 const char* movie_request_name(int id, char (&name)[9]) {
     if (id < 0 || id >= 64) return "<invalid>";
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    const char* entry = reinterpret_cast<const char*>(image + 0x103728 + id * 10);
+    const char* entry = reinterpret_cast<const char*>(image + (is_retail_executable() ? 0x103628 : 0x103728) + id * 10);
     std::memcpy(name, entry, 8);
     name[8] = '\0';
     return name[0] ? name : "<empty>";
@@ -760,7 +766,7 @@ bool install_movie_request_audit() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* target = image + 0x812CF;
+    auto* target = image + (is_retail_executable() ? 0x810BF : 0x812CF);
     constexpr std::size_t prologue_size = 9;
     constexpr std::uint8_t expected[prologue_size]{
         0x55, 0x8B, 0xEC, 0x81, 0xEC, 0x94, 0x00, 0x00, 0x00};
@@ -899,7 +905,7 @@ bool install_movie_skip_gate() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* call = image + 0x9DEDF;
+    auto* call = image + (is_retail_executable() ? 0x9DD7F : 0x9DEDF);
     constexpr std::uint8_t expected[5]{0xE8, 0x1E, 0x5F, 0x00, 0x00};
     if (std::memcmp(call, expected, sizeof(expected)) != 0) {
         log_line("movie skip callsite signature mismatch address=%p", call);
@@ -1150,8 +1156,8 @@ bool install_native_movie_frame_hook() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* call = image + 0x9DF37;
-    auto* native_frame = image + 0x9E0A2;
+    auto* call = image + (is_retail_executable() ? 0x9DDD7 : 0x9DF37);
+    auto* native_frame = image + (is_retail_executable() ? 0x9DF42 : 0x9E0A2);
     constexpr std::uint8_t expected_call[5]{0xE8, 0x66, 0x01, 0x00, 0x00};
     constexpr std::uint8_t expected_frame_prefix[23]{
         0x55, 0x8B, 0xEC, 0x8B, 0x45, 0x08, 0x50, 0xFF, 0x15, 0x38, 0xB2, 0x4B,
