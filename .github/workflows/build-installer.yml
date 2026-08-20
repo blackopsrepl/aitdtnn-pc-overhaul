@@ -1,0 +1,83 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Setup.exe
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install CPython 3.10.2
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10.2"
+          architecture: x64
+          check-latest: true
+
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Check release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $expected = "v$((Get-Content VERSION -Raw).Trim())"
+          if ($env:GITHUB_REF_NAME -ne $expected) {
+            throw "Tag '$env:GITHUB_REF_NAME' does not match VERSION '$expected'."
+          }
+
+      - name: Build validated installer
+        shell: pwsh
+        run: .\build-release.ps1
+
+      - name: Prepare public download
+        shell: pwsh
+        run: |
+          $downloadRoot = Join-Path $PWD 'build\download'
+          New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+          $installer = Get-ChildItem -LiteralPath build/release `
+            -Filter 'AITDTNN-PC-Overhaul-Setup-*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'The release installer was not produced.' }
+          Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $downloadRoot 'Setup.exe')
+          Get-ChildItem -LiteralPath build/release -Filter '*Source*.zip' | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $downloadRoot
+          }
+          $sums = Get-ChildItem -LiteralPath $downloadRoot -File | ForEach-Object {
+            "$(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 | ForEach-Object Hash)  $($_.Name)"
+          }
+          $sums | Set-Content -LiteralPath (Join-Path $downloadRoot 'SHA256SUMS.txt') -Encoding ascii
+
+      - name: Upload installer download
+        uses: actions/upload-artifact@v4
+        with:
+          name: AITDTNN-PC-Overhaul-Windows
+          path: build/download/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$env:GITHUB_REF_NAME" build/download/* `
+            --title "AITD:TNN PC Overhaul $env:GITHUB_REF_NAME" --generate-notes

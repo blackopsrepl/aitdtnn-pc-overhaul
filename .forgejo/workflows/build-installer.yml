@@ -1,0 +1,101 @@
+name: Build Windows installer
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-installer-${{ forgejo.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Setup.exe
+    # Requires a Windows Forgejo Runner registered with the windows-latest label.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: https://data.forgejo.org/actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install CPython 3.10.2
+        shell: pwsh
+        run: |
+          $pythonRoot = Join-Path $env:RUNNER_TEMP 'python-3.10.2'
+          $installer = Join-Path $env:RUNNER_TEMP 'python-3.10.2-amd64.exe'
+          Invoke-WebRequest `
+            -Uri 'https://www.python.org/ftp/python/3.10.2/python-3.10.2-amd64.exe' `
+            -OutFile $installer
+          Start-Process -FilePath $installer -Wait -NoNewWindow -ArgumentList @(
+            '/quiet', 'InstallAllUsers=0', 'PrependPath=0', "TargetDir=$pythonRoot"
+          )
+          "$pythonRoot;$pythonRoot\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Inno Setup 6
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
+      - name: Check release tag
+        if: startsWith(forgejo.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $expected = "v$((Get-Content VERSION -Raw).Trim())"
+          if ($env:FORGEJO_REF_NAME -ne $expected) {
+            throw "Tag '$env:FORGEJO_REF_NAME' does not match VERSION '$expected'."
+          }
+
+      - name: Build validated installer
+        shell: pwsh
+        run: .\build-release.ps1
+
+      - name: Prepare public download
+        shell: pwsh
+        run: |
+          $downloadRoot = Join-Path $PWD 'build\download'
+          New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+          $installer = Get-ChildItem -LiteralPath build/release `
+            -Filter 'AITDTNN-PC-Overhaul-Setup-*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'The release installer was not produced.' }
+          Copy-Item -LiteralPath $installer.FullName -Destination (Join-Path $downloadRoot 'Setup.exe')
+          Get-ChildItem -LiteralPath build/release -Filter '*Source*.zip' | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $downloadRoot
+          }
+          $sums = Get-ChildItem -LiteralPath $downloadRoot -File | ForEach-Object {
+            "$(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256 | ForEach-Object Hash)  $($_.Name)"
+          }
+          $sums | Set-Content -LiteralPath (Join-Path $downloadRoot 'SHA256SUMS.txt') -Encoding ascii
+
+      - name: Upload installer download
+        uses: https://data.forgejo.org/actions/upload-artifact@v3
+        with:
+          name: AITDTNN-PC-Overhaul-Windows
+          path: build/download/*
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish Forgejo release
+        if: startsWith(forgejo.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          FORGEJO_API_URL: ${{ forgejo.server_url }}/api/v1
+          FORGEJO_REPOSITORY: ${{ forgejo.repository }}
+          FORGEJO_REF_NAME: ${{ forgejo.ref_name }}
+          FORGEJO_TOKEN: ${{ forgejo.token }}
+        run: |
+          $headers = @{ Authorization = "token $env:FORGEJO_TOKEN" }
+          $releaseEndpoint = "$env:FORGEJO_API_URL/repos/$env:FORGEJO_REPOSITORY/releases"
+          $release = Invoke-RestMethod -Method Post -Uri $releaseEndpoint -Headers $headers `
+            -ContentType 'application/json' -Body (@{
+              tag_name = $env:FORGEJO_REF_NAME
+              name = "AITD:TNN PC Overhaul $env:FORGEJO_REF_NAME"
+            } | ConvertTo-Json)
+          Get-ChildItem -LiteralPath build/download -File | ForEach-Object {
+            $assetName = [uri]::EscapeDataString($_.Name)
+            Invoke-RestMethod -Method Post `
+              -Uri "$releaseEndpoint/$($release.id)/assets?name=$assetName" `
+              -Headers $headers -ContentType 'application/octet-stream' -InFile $_.FullName
+          }
