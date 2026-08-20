@@ -115,6 +115,18 @@ validated loader, audio restoration, renderer, rumble module, renderer shaders,
 and Xidi controller stack. It does not patch or replace `alone4.exe`, create a
 launcher, or create a shortcut.
 
+### Save games
+
+The original PC game expects a `Save` folder beside `alone4.exe`, but does not
+always create it. If saving appears to succeed but Load Game shows no saves,
+create this folder manually:
+
+```text
+<game folder>\Save\
+```
+
+Save files are stored there as `_Alone4_*.sav`.
+
 ## Safe uninstall and upgrades
 
 Installation and uninstall are ownership-aware. Existing files from a previous
