@@ -1,92 +1,172 @@
 # AITD:TNN PC Overhaul
 
-Run `Setup.exe` from the repository root. Select the supported installed PC game
-folder and either Dreamcast disc image. The wizard installs the complete working
-overhaul in one pass; afterward, start the game normally with `alone4.exe`.
+An independent preservation and compatibility overhaul for the Windows release
+of *Alone in the Dark: The New Nightmare*. It keeps the original PC game,
+story, sound effects, movies and game data intact while restoring selected
+Dreamcast-era features and modernizing presentation and controller support.
 
-Current integrated version: `0.2.0`. The exact supported installation has been
-manually runtime-validated through startup and the first playable areas with the
-Dreamcast synthesis/bank path, PC SFX and FMV audio, proportional borderless 4:3
-rendering, Xbox controls and restored rumble active together. This is still an
-unpublished working tree, not a public release or a full-game validation claim.
-This monorepo is the canonical source for the integrated stack; earlier
-standalone renderer and music workspaces are reference/development inputs, not
-the release source of truth.
+Current integrated version: **0.2.0**.
 
-This is the collision-free monorepo for the modular *Alone in the Dark: The New
-Nightmare* PC overhaul. It contains no game data and no Dreamcast assets.
+## What it adds
 
-The shared loader is an app-local, 32-bit `version.dll` proxy. The original game
-already imports `VERSION.dll`, so normal `alone4.exe` launch loads the proxy with
-no launcher and no on-disk executable patch. Before the original entrypoint runs,
-the proxy validates the supported pristine executable and initializes modules in
-this fixed order:
+### Dreamcast music and ambience
 
-1. `audio-restoration\aitd4-audio-hook.dll` via
-   `DWORD WINAPI AITD4_AudioInitialize(void*)`
-2. `renderer\aitd4-renderer-hook.dll` via
-   `DWORD WINAPI AITD4_Initialize(void*)`
-3. `rumble\aitd4-rumble-hook.dll` via
-   `DWORD WINAPI AITD4_RumbleInitialize(void*)`
+The overhaul restores interactive music and ambience through the Dreamcast
+release's Manatee/AICA synthesis path, using the PC engine's live gameplay
+events. PC sound effects and native FMV audio continue to use their original
+paths.
 
-The loader fails closed on any validation, load, export, or initialization error.
-It appends diagnostics to `aitdtnn-overhaul-loader.log` beside `alone4.exe`.
+The installer extracts the required audio data locally from a Dreamcast disc
+image that you provide. No Dreamcast audio, game, or other copyrighted assets
+are included in this repository or in the installer.
 
-The combined Inno Setup wizard asks for the installed PC game and either owned
-Dreamcast disc image. It extracts the required audio assets locally, installs
-the exact validated loader, all three modules, renderer configuration/shaders
-and complete Xidi Xbox-controller stack in one transaction, and creates no
-shortcut or user-facing launcher. `alone4.exe` remains byte-for-byte unchanged.
+### Correct 4:3 presentation on modern displays
 
-Install and uninstall are ownership-aware. Setup preserves any previous
-`audio-restoration`, `renderer`, `rumble`, app-local `version.dll`, Xidi wrappers,
-Xidi configuration and `keys.bin`. Uninstall restores that stack. If an installed
-overhaul file was later modified or another file was added to its module
-directories, uninstall moves the current stack to a timestamped preservation
-directory instead of deleting or overwriting it.
-Integrated-version upgrades are deliberately refused; uninstall the existing
-integrated version first so its original rollback ownership remains unambiguous.
+- Borderless fullscreen on the primary monitor.
+- Centered, proportional 4:3 output with black side pillars instead of
+  stretching the game image.
+- OpenGL 3.3 compatibility rendering for the original fixed-function game.
+- Optional 4x MSAA, up to 16x anisotropic filtering, VSync, and fixes for
+  common modern-driver edge-sampling issues.
+- Native Bink movies remain responsible for decoding, timing, audio, and frame
+  advancement while being presented inside the same proportional viewport as
+  gameplay.
 
-Run `build.cmd` or `powershell -File build.ps1` from a 64-bit Windows Visual
-Studio 2022 C++ build machine to build and test the audio, renderer, rumble and
-loader sources. Release packaging deliberately uses the byte-exact working
-runtime recorded in `payload\working-payload.json`; it does not replace those
-validated DLLs with a fresh rebuild. Run `powershell -File build-release.ps1`
-from a clean committed tree to validate that payload, package the asset builder,
-compile the single Windows Setup wizard and create its exact corresponding-source
-archive. `-Development` permits a test installer from an uncommitted tree.
+The default presentation includes a restrained neutral CRT-style treatment for
+the game's low-resolution 640x480 signal: scanlines, a subtle aperture grille,
+and mild bloom/halation. It does not add curvature, overscan, chromatic
+aberration, vignette, aggressive sharpening, or stylized color grading.
 
-The packaged asset builder and combined installer target 64-bit Windows; the
-game, loader and runtime hook DLLs remain 32-bit x86.
+Disable it by changing `renderer\aitd4-overhaul.ini`:
 
-`installer\tests\Test-InstallerLifecycle.ps1` performs the destructive-edge
-installer matrix in a validated disposable directory: fresh install, upgrade
-refusal, exact previous-stack restoration and modified/unknown-file
-preservation. It requires a user-supplied supported executable and Dreamcast
-image and deletes its scratch tree unless `-Keep` is specified.
+```ini
+[CRT]
+Enabled=0
+```
 
-The rumble module restores the PC port's retained Dreamcast-authored request path
-at its dead backend and outputs the original stop, weak, and strong profiles over
-XInput. It requires no Dreamcast image at install or runtime.
+### Restored character-selection movies
 
-The renderer restores the omitted character-selection movie request at the
-verified post-interstitial continuation: character confirmation and the native
-portrait/title voice complete first, then native Bink plays `SELECT_A` or
-`SELECT_C`, then route setup continues. The common movie controller also keeps a
-runtime ledger of expected requests, opens, first frames, closes and frame counts.
-The physical movie and trigger inventory is maintained in
-`renderer\docs\fmv-audit.md`; unresolved script-expression IDs remain explicitly
-documented instead of being guessed.
+The renderer restores the verified post-interstitial character-selection movie
+continuation for Aline and Carnby. Native character confirmation, portrait/title
+voice, movie playback, and route setup occur in the intended order. A runtime
+ledger records movie requests, opens, first frames, closes, and frame counts to
+help diagnose unsupported or incomplete paths.
 
-The renderer also provides an optional neutral CRT presentation path, enabled
-by default for the current low-resolution asset stack. Gameplay and decoded
-Bink frames share the same 640x480 signal reconstruction, linear-light aperture
-grille/scanline response and restrained neutral bloom/halation. The physical
-4:3 viewport and black pillars are unchanged; native Bink still owns decode,
-audio, timing and frame advancement. Setting `[CRT] Enabled=0` restores the
-previous compositor and native Bink blit path.
+### Xbox controller support and rumble
 
-Production PE builds use reproducible compiler/linker output. Component manifests
-are regenerated and hash-verified by the root source build. The distributable
-`Setup.exe` packages the exact validated runtime recorded in
-`payload\working-payload.json`.
+The packaged Xidi controller layer maps an Xbox/XInput controller into the
+legacy input interfaces expected by the PC game. The overhaul also restores the
+game's retained Dreamcast-authored vibration path and sends its original weak
+and strong profiles to the XInput motors.
+
+Rumble can be adjusted in `rumble\aitd4-rumble.ini`:
+
+```ini
+[Rumble]
+Enabled=1
+Controller=Auto
+Strength=1.0
+Profile=Dreamcast
+```
+
+Rumble does not require a Dreamcast image at runtime.
+
+## Requirements and compatibility
+
+- 64-bit Windows.
+- An installed English 15-slot/no-CD PC release of *Alone in the Dark: The
+  New Nightmare*.
+- Either owned Dreamcast disc image in a supported format (`.cue`, `.gdi`,
+  `.iso`, `.bin`, `.img`, or `.raw`) for the music restoration.
+- An OpenGL-capable display driver. An Xbox/XInput-compatible controller is
+  optional.
+
+The installer supports one exact `alone4.exe` build. Its SHA-256 is:
+
+```text
+5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672
+```
+
+Address-sensitive modules fail closed when the executable is not this supported
+build. This protects other versions from receiving incompatible runtime hooks.
+
+## Installation
+
+1. Close the game.
+2. Run [`Setup.exe`](Setup.exe) from this repository, or use the versioned setup
+   executable produced by the release build.
+3. Select the folder containing `alone4.exe`.
+4. Select either of your owned Dreamcast disc images when prompted.
+5. Finish setup, then launch the game normally with `alone4.exe`.
+
+The installer extracts the audio assets on your machine and installs the
+validated loader, audio restoration, renderer, rumble module, renderer shaders,
+and Xidi controller stack. It does not patch or replace `alone4.exe`, create a
+launcher, or create a shortcut.
+
+## Safe uninstall and upgrades
+
+Installation and uninstall are ownership-aware. Existing files from a previous
+controller or overhaul setup are backed up and restored. If an installed file
+has been modified, or an unknown file has been added to an overhaul directory,
+uninstall preserves the current stack in a timestamped directory rather than
+silently deleting it.
+
+In-place integrated-version upgrades are intentionally refused. Uninstall the
+existing integrated version first, then install the new version.
+
+The loader writes diagnostics beside the game executable to:
+
+```text
+aitdtnn-overhaul-loader.log
+```
+
+Component logs are kept in their respective `audio-restoration`, `renderer`,
+and `rumble` directories.
+
+## Scope and known limits
+
+This project is deliberately conservative. It does not provide widescreen
+projection, AI texture upscaling, texture replacement, replacement movies,
+stylized grading, fog redesign, or undocumented model/shadow changes. Music
+follows the PC engine's live cue and event timing; it does not independently
+replace every PC scene-to-cue decision with Dreamcast scheduling.
+
+The current runtime has been manually validated through startup and the first
+playable areas with Dreamcast synthesis/banks, native PC sound effects and FMV
+audio, proportional rendering, CRT presentation, Xbox input, and rumble active
+together. This is not a claim of complete full-game validation; remaining FMV
+and presentation acceptance work is documented in [`REPORT.md`](REPORT.md).
+
+The renderer's investigation and movie inventory are available in
+[`renderer/docs/fmv-audit.md`](renderer/docs/fmv-audit.md), with presentation
+design notes in [`renderer/docs/crt-design.md`](renderer/docs/crt-design.md).
+
+## Building from source
+
+Runtime modules are 32-bit x86 because the game is 32-bit. The asset builder,
+release packaging scripts, and installer target 64-bit Windows. On a 64-bit
+Windows machine with Visual Studio 2022 C++ tools:
+
+```powershell
+.\build.ps1
+.\build-release.ps1
+```
+
+`build.ps1` builds and tests the maintained audio, renderer, rumble, and loader
+sources. `build-release.ps1` validates the recorded working payload, packages
+the asset builder, compiles the Inno Setup wizard, and creates the release
+artifacts. Use `-Development` only when a test installer from an uncommitted
+tree is required.
+
+The destructive installer lifecycle matrix is available at
+`installer\tests\Test-InstallerLifecycle.ps1`; it requires a user-supplied
+supported game executable and Dreamcast image and runs in a disposable test
+directory.
+
+## License and credits
+
+See [`LICENSE.txt`](LICENSE.txt), [`NOTICE.md`](NOTICE.md), and the component
+license files for licensing and third-party notices. The audio restoration
+includes the GPLv3-only Highly Theoretical AICA emulation core; Xidi is included
+under its own license.
