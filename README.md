@@ -7,6 +7,17 @@ Dreamcast-era features and modernizing presentation and controller support.
 
 Current integrated version: **0.2.0**.
 
+## In-game preview
+
+The screenshots below were captured from the supported PC build with the
+overhaul active.
+
+![Title screen](screenshots/title-screen.jpg)
+
+![First playable scene](screenshots/first-scene.jpg)
+
+![Inventory menu](screenshots/inventory-menu.jpg)
+
 ## What it adds
 
 ### Dreamcast music and ambience
