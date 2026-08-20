@@ -12,11 +12,11 @@ Current integrated version: **0.2.0**.
 The screenshots below were captured from the supported PC build with the
 overhaul active.
 
-![Title screen](screenshots/title-screen.jpg)
+![Title screen](screenshots/title-screen.jpg?v=42ccccb)
 
-![First playable scene](screenshots/first-scene.jpg)
+![First playable scene](screenshots/first-scene.jpg?v=42ccccb)
 
-![Inventory menu](screenshots/inventory-menu.jpg)
+![Inventory menu](screenshots/inventory-menu.jpg?v=42ccccb)
 
 ## What it adds
 
