@@ -1,9 +1,10 @@
 # AITD:TNN PC Overhaul
 
-An independent preservation and compatibility overhaul for the Windows release
-of *Alone in the Dark: The New Nightmare*. It keeps the original PC game,
-story, sound effects, movies and game data intact while restoring selected
-Dreamcast-era features and modernizing presentation and controller support.
+An independent preservation and compatibility overhaul for the **original PC
+release** of *Alone in the Dark: The New Nightmare*—it is not based on and does
+not support the Steam port. It keeps the original PC game, story, sound
+effects, movies and game data intact while restoring selected Dreamcast-era
+features and modernizing presentation and controller support.
 
 Current integrated version: **0.2.0**.
 
@@ -85,14 +86,16 @@ Rumble does not require a Dreamcast image at runtime.
 ## Requirements and compatibility
 
 - 64-bit Windows.
-- An installed English 15-slot/no-CD PC release of *Alone in the Dark: The
-  New Nightmare*.
+- An installed English 15-slot/no-CD original PC release of *Alone in the
+  Dark: The New Nightmare* (not the Steam port).
 - Either owned Dreamcast disc image in a supported format (`.cue`, `.gdi`,
   `.iso`, `.bin`, `.img`, or `.raw`) for the music restoration.
 - An OpenGL-capable display driver. An Xbox/XInput-compatible controller is
   optional.
 
-The installer supports one exact `alone4.exe` build. Its SHA-256 is:
+This overhaul was tested against, and the installer supports, one exact
+original-PC executable: the English 15-slot/no-CD `alone4.exe` build. Its
+SHA-256 is:
 
 ```text
 5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672
