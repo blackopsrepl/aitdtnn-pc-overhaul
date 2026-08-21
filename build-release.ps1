@@ -52,7 +52,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
         throw 'CPython 3.10 was not found.'
     }
     $pythonVersion = & $pythonCommand.Source @pythonPrefix -c `
-        'import sys; print(".".join(map(str, sys.version_info[:3])))'
+        'import sys; print(*sys.version_info[:3], sep=chr(46))'
     $parsedPythonVersion = [version]$pythonVersion
     if ($parsedPythonVersion -ne [version]'3.10.2') {
         throw "CPython 3.10.2 is required for the pinned release environment; found $pythonVersion."
@@ -60,13 +60,13 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
     & $pythonCommand.Source @pythonPrefix -m venv $venv
     if ($LASTEXITCODE -ne 0) { throw 'Could not create the asset-builder environment.' }
 }
-$venvVersion = & $venvPython -c 'import sys; print(".".join(map(str, sys.version_info[:3])))'
+$venvVersion = & $venvPython -c 'import sys; print(*sys.version_info[:3], sep=chr(46))'
 if ($LASTEXITCODE -ne 0) { throw 'Could not query the asset-builder Python environment.' }
 $parsedVenvVersion = [version]$venvVersion
 if ($parsedVenvVersion -ne [version]'3.10.2') {
     throw "The release environment must use CPython 3.10.2; found $venvVersion."
 }
-$venvBits = & $venvPython -c 'import struct; print(struct.calcsize("P") * 8)'
+$venvBits = & $venvPython -c 'import struct; print(struct.calcsize(chr(80)) * 8)'
 if ($LASTEXITCODE -ne 0 -or $venvBits -ne '64') {
     throw "The release environment must use 64-bit CPython; found $venvBits-bit."
 }

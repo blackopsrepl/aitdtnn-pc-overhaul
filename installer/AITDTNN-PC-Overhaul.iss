@@ -198,7 +198,7 @@ begin
     end
     else if not ExactExecutableSupported then
     begin
-      MsgBox('This combined overhaul supports only the verified English 15-slot/no-CD alone4.exe.',
+      MsgBox('This combined overhaul supports only the verified English 15-slot/no-CD or retail CD alone4.exe.',
         mbError, MB_OK);
       Result := False;
     end;
