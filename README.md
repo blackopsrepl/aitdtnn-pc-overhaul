@@ -107,8 +107,7 @@ supported builds. This protects other versions from receiving incompatible runti
 ## Installation
 
 1. Close the game.
-2. Run [`Setup.exe`](Setup.exe) from this repository, or use the versioned setup
-   executable produced by the release build.
+2. Download and run `Setup.exe` from the [latest GitHub release](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/releases/latest). Do not rely on the copy committed to this repository; it can lag behind the current release.
 3. Select the folder containing `alone4.exe`.
 4. Select either of your owned Dreamcast disc images when prompted.
 5. Finish setup, then launch the game normally with `alone4.exe`.
@@ -117,6 +116,43 @@ The installer extracts the audio assets on your machine and installs the
 validated loader, audio restoration, renderer, rumble module, renderer shaders,
 and Xidi controller stack. It does not patch or replace `alone4.exe`, create a
 launcher, or create a shortcut.
+
+## FAQ
+
+### Which PC versions work?
+
+Version 0.3.0 supports the verified English 15-slot/no-CD executable and the
+stock retail PC CD executable. The installer checks the executable's SHA-256
+hash before installing address-sensitive modules, so other builds, repacks, and
+storefront releases are rejected rather than patched unsafely. See the two
+supported hashes in [Requirements and compatibility](#requirements-and-compatibility).
+
+### Does this support the Steam version?
+
+No. The overhaul was developed and tested against the original PC release; the
+Steam port is not supported or currently tested.
+
+### I have a supported executable, but setup says it is unsupported. What should I do?
+
+First make sure you downloaded `Setup.exe` from the [latest GitHub release](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/releases/latest), rather than using the repository copy. Then confirm that `alone4.exe` matches one of the hashes above. If it still fails, open an issue and include the installer message, the executable's SHA-256 hash, your game edition, and operating system.
+
+### Do I need both Dreamcast discs?
+
+No. Either Dreamcast disc image is sufficient: both contain the same audio
+payload used by the installer. You must supply an image you own; the project
+does not distribute Dreamcast game or audio assets.
+
+### Does it work on Linux or Wine?
+
+Linux/Wine compatibility has not been tested or supported yet. The current
+requirements target 64-bit Windows, so Wine results are welcome as issue
+reports but cannot be guaranteed.
+
+### Why is a Dreamcast image needed, and will I need it every time I play?
+
+The installer extracts the Dreamcast music and ambience from your image locally
+so that no copyrighted Dreamcast assets need to be distributed. The image is
+needed for installation only; rumble also does not require it at runtime.
 
 ### Save games
 
