@@ -4,15 +4,70 @@
 #include "explicit_initializer.hpp"
 #include "midi_lifecycle.hpp"
 #include "music_identity.hpp"
+#include "miles_stream.hpp"
 
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cstdlib>
 #include <string>
 #include <thread>
 #include <tuple>
 #include <type_traits>
 #include <vector>
+
+namespace {
+
+struct FakeMiles {
+    int allocate_calls{};
+    int init_calls{};
+    int type{};
+    int rate{};
+    int volume{};
+    int start_calls{};
+    int load_calls{};
+    int ready{-1};
+    aitd4::MilesSampleCallback eob{};
+    std::array<const void*, 2> addresses{};
+    std::array<std::uint32_t, 2> lengths{};
+} fake;
+
+void* WINAPI fake_mem_alloc(std::uint32_t size) { return std::malloc(size); }
+void WINAPI fake_mem_free(void* memory) { std::free(memory); }
+aitd4::MilesSample WINAPI fake_allocate(aitd4::MilesDriver driver) {
+    ++fake.allocate_calls;
+    return driver ? reinterpret_cast<void*>(0x2222) : nullptr;
+}
+void WINAPI fake_release(aitd4::MilesSample) {}
+void WINAPI fake_init(aitd4::MilesSample) { ++fake.init_calls; }
+void WINAPI fake_type(aitd4::MilesSample, std::int32_t format, std::uint32_t) { fake.type = format; }
+void WINAPI fake_rate(aitd4::MilesSample, std::int32_t rate) { fake.rate = rate; }
+void WINAPI fake_volume(aitd4::MilesSample, std::int32_t volume) { fake.volume = volume; }
+std::int32_t WINAPI fake_ready(aitd4::MilesSample) {
+    const auto result = fake.ready;
+    fake.ready = -1;
+    return result;
+}
+void WINAPI fake_load(aitd4::MilesSample, std::uint32_t index, const void* address,
+                      std::uint32_t length) {
+    ++fake.load_calls;
+    fake.addresses.at(index) = address;
+    fake.lengths.at(index) = length;
+}
+aitd4::MilesSampleCallback WINAPI fake_register(aitd4::MilesSample,
+                                                aitd4::MilesSampleCallback callback) {
+    fake.eob = callback;
+    return nullptr;
+}
+void WINAPI fake_start(aitd4::MilesSample) { ++fake.start_calls; }
+void WINAPI fake_end(aitd4::MilesSample) {}
+bool fake_render(std::int16_t* output, unsigned frames) {
+    for (unsigned index = 0; index != frames * 2; ++index)
+        output[index] = static_cast<std::int16_t>((index % 127) - 63);
+    return true;
+}
+
+} // namespace
 
 using aitd4::music_identity::Candidate;
 using aitd4::music_identity::Evidence;
@@ -21,6 +76,25 @@ using AudioInitializeAbi = DWORD (WINAPI*)(void*);
 static_assert(std::is_same_v<decltype(&AITD4_AudioInitialize), AudioInitializeAbi>);
 
 int main() {
+    {
+        aitd4::MilesApi api{&fake_mem_alloc, &fake_mem_free, &fake_allocate,
+                            &fake_release, &fake_init, &fake_type, &fake_rate,
+                            &fake_volume, &fake_ready, &fake_load, &fake_register,
+                            &fake_start, &fake_end};
+        aitd4::MilesStream stream(api, &fake_render, nullptr);
+        assert(stream.start(reinterpret_cast<void*>(0x1111)));
+        assert(fake.allocate_calls == 1 && fake.init_calls == 1 && fake.start_calls == 1);
+        assert(fake.type == aitd4::MilesStream::stereo_16_format);
+        assert(fake.rate == 44100 && fake.volume == 127 && fake.load_calls == 2);
+        assert(fake.addresses[0] != fake.addresses[1]);
+        assert(fake.lengths[0] == aitd4::MilesStream::frames_per_buffer * 4);
+        assert(stream.rendered_frames() == aitd4::MilesStream::frames_per_buffer * 2);
+        assert(stream.peak() > 0 && fake.eob);
+        fake.ready = 0;
+        fake.eob(reinterpret_cast<void*>(0x2222));
+        assert(fake.load_calls == 3);
+        assert(stream.rendered_frames() == aitd4::MilesStream::frames_per_buffer * 3);
+    }
     {
         const std::array candidates{Candidate{"jardin2", false, 0}};
         const auto result = aitd4::music_identity::resolve(candidates);

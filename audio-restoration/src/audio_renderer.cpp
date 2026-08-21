@@ -1,7 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
-#include <mmsystem.h>
 
 #include "audio_renderer.hpp"
 #include "midi_lifecycle.hpp"
@@ -33,11 +32,6 @@ struct Engine {
     std::array<std::uint32_t, 6> slot_size{};
     std::array<int, 6> player_bank{-1, -1, -1, -1, -1, -1};
     std::array<MidiNoteState, 6> active_notes{};
-    HWAVEOUT output{};
-    static constexpr unsigned frames = 1024;
-    static constexpr unsigned buffers = 4;
-    std::array<std::array<std::int16_t, frames * 2>, buffers> pcm{};
-    std::array<WAVEHDR, buffers> headers{};
     std::atomic_bool ready{};
 } g;
 
@@ -187,30 +181,6 @@ void select_bank_locked(int player, int slot) {
     g.player_bank[player] = slot;
 }
 
-void CALLBACK wave_callback(HWAVEOUT output, UINT message, DWORD_PTR, DWORD_PTR parameter, DWORD_PTR) {
-    if (message != WOM_DONE || !parameter || !g.ready) return;
-    auto* header = reinterpret_cast<WAVEHDR*>(parameter);
-    EnterCriticalSection(&g.lock);
-    execute(reinterpret_cast<std::int16_t*>(header->lpData), Engine::frames);
-    LeaveCriticalSection(&g.lock);
-    waveOutWrite(output, header, sizeof(*header));
-}
-
-bool open_output() {
-    WAVEFORMATEX format{WAVE_FORMAT_PCM, 2, 44100, 44100 * 4, 4, 16, 0};
-    if (waveOutOpen(&g.output, WAVE_MAPPER, &format, reinterpret_cast<DWORD_PTR>(wave_callback),
-                    0, CALLBACK_FUNCTION) != MMSYSERR_NOERROR) return false;
-    for (unsigned i = 0; i != Engine::buffers; ++i) {
-        auto& header = g.headers[i];
-        header.lpData = reinterpret_cast<LPSTR>(g.pcm[i].data());
-        header.dwBufferLength = static_cast<DWORD>(g.pcm[i].size() * sizeof(std::int16_t));
-        if (!execute(g.pcm[i].data(), Engine::frames)) return false;
-        if (waveOutPrepareHeader(g.output, &header, sizeof(header)) != MMSYSERR_NOERROR) return false;
-        if (waveOutWrite(g.output, &header, sizeof(header)) != MMSYSERR_NOERROR) return false;
-    }
-    return true;
-}
-
 } // namespace
 
 bool renderer_start(const char* root, const char*) {
@@ -238,11 +208,18 @@ bool renderer_start(const char* root, const char*) {
     for (int player = 0; player != 6; ++player) select_bank_locked(player, 5);
     if (!execute(scratch.data(), 512)) return false;
     g.ready = true;
-    if (!open_output()) { g.ready = false; return false; }
     return true;
 }
 
 bool renderer_ready() { return g.ready.load(); }
+
+bool renderer_render_pcm(std::int16_t* output, unsigned frames) {
+    if (!g.ready || !output || !frames) return false;
+    EnterCriticalSection(&g.lock);
+    const bool rendered = execute(output, frames);
+    LeaveCriticalSection(&g.lock);
+    return rendered;
+}
 
 bool renderer_set_scene(int player, const char* container, int bank_slot) {
     if (!g.ready || player < 0 || player >= 6) return false;

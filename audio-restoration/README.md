@@ -8,6 +8,13 @@ The module therefore restores the Dreamcast synthesis/bank path but does not
 claim to replace a genuinely different PC scene-to-cue decision. PC sound
 effects and native FMV audio remain on their original paths.
 
+The AICA core is output-only: it never opens WinMM or a second audio device.
+The hook captures the game's actual Miles `HDIGDRIVER` through its imported
+`AIL_waveOutOpen` and `AIL_allocate_sample_handle` calls, allocates a dedicated
+Miles sample, and continuously submits two locked 44.1 kHz stereo PCM buffers.
+Persistent PC music dispatch is suppressed from the first hooked event; there
+is no PC-music fallback. Short MIDI sound effects and FMV audio are unchanged.
+
 No copyrighted game or Dreamcast assets are included. The combined overhaul
 wizard derives the required runtime catalog locally from a Dreamcast disc image
 provided by the user.

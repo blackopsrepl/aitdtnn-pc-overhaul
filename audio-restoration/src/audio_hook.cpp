@@ -1,12 +1,14 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <mmsystem.h>
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <share.h>
 #include <string>
 #include <vector>
@@ -15,6 +17,7 @@
 #include "audio_renderer.hpp"
 #include "explicit_initializer.hpp"
 #include "music_identity.hpp"
+#include "miles_stream.hpp"
 
 namespace {
 
@@ -87,6 +90,12 @@ std::uint64_t g_load_serial{};
 using CreateFileAFn = HANDLE(WINAPI*)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES,
                                      DWORD, DWORD, HANDLE);
 CreateFileAFn g_create_file_a = nullptr;
+using MilesWaveOutOpenFn = std::int32_t (WINAPI*)(aitd4::MilesDriver*, LPHWAVEOUT*,
+                                                  std::int32_t, LPWAVEFORMAT);
+MilesWaveOutOpenFn g_miles_wave_out_open{};
+using MilesAllocateSampleFn = aitd4::MilesSample (WINAPI*)(aitd4::MilesDriver);
+MilesAllocateSampleFn g_miles_allocate_sample{};
+std::unique_ptr<aitd4::MilesStream> g_miles_stream;
 
 void log_line(const char* format, ...) {
     EnterCriticalSection(&g_log_lock);
@@ -101,6 +110,17 @@ void log_line(const char* format, ...) {
         std::fputc('\n', g_log);
     }
     LeaveCriticalSection(&g_log_lock);
+}
+
+void stream_log(const char* message) {
+    log_line("%s", message ? message : "Miles AICA stream message unavailable");
+}
+
+void attach_miles_stream(aitd4::MilesDriver driver, const char* source) {
+    if (!driver || !g_miles_stream || g_miles_stream->running()) return;
+    log_line("Miles driver captured source=%s driver=%p", source, driver);
+    if (!g_miles_stream->start(driver))
+        log_line("Miles AICA stream creation failed; persistent PC music remains suppressed");
 }
 
 std::vector<std::string> split_tabs(const char* line) {
@@ -359,6 +379,63 @@ bool install_file_provenance_hook() {
     return true;
 }
 
+std::int32_t WINAPI hook_miles_wave_out_open(aitd4::MilesDriver* driver,
+                                             LPHWAVEOUT* wave_out,
+                                             std::int32_t device_id,
+                                             LPWAVEFORMAT format) {
+    const auto result = g_miles_wave_out_open(driver, wave_out, device_id, format);
+    const auto captured = driver ? *driver : nullptr;
+    log_line("Miles waveOutOpen result=%ld driver=%p rate=%lu channels=%u",
+             static_cast<long>(result), captured,
+             format ? static_cast<unsigned long>(format->nSamplesPerSec) : 0,
+             format ? format->nChannels : 0);
+    if (result == 0 && captured && g_miles_stream && !g_miles_stream->running()) {
+        attach_miles_stream(captured, "waveOutOpen");
+    }
+    return result;
+}
+
+aitd4::MilesSample WINAPI hook_miles_allocate_sample(aitd4::MilesDriver driver) {
+    const auto sample = g_miles_allocate_sample(driver);
+    attach_miles_stream(driver, "allocate_sample_handle");
+    return sample;
+}
+
+bool install_miles_output_hook() {
+    auto module = GetModuleHandleA("mss32.dll");
+    aitd4::MilesApi api{};
+    if (!module || !aitd4::resolve_miles_api(module, api)) {
+        log_line("Miles AICA stream rejected: required Miles 6.1 exports unavailable");
+        return false;
+    }
+    auto** wave_slot = find_main_import("Mss32.dll", "_AIL_waveOutOpen@16");
+    auto** allocate_slot = find_main_import("Mss32.dll", "_AIL_allocate_sample_handle@4");
+    if (!wave_slot || !allocate_slot) {
+        log_line("Miles AICA stream rejected: required game imports unavailable wave=%p allocate=%p",
+                 wave_slot, allocate_slot);
+        return false;
+    }
+    g_miles_wave_out_open = reinterpret_cast<MilesWaveOutOpenFn>(*wave_slot);
+    g_miles_allocate_sample = reinterpret_cast<MilesAllocateSampleFn>(*allocate_slot);
+    g_miles_stream = std::make_unique<aitd4::MilesStream>(api, &aitd4::renderer_render_pcm,
+                                                          &stream_log);
+    DWORD wave_protection = 0;
+    if (!VirtualProtect(wave_slot, sizeof(*wave_slot), PAGE_READWRITE, &wave_protection)) return false;
+    *wave_slot = reinterpret_cast<void*>(&hook_miles_wave_out_open);
+    DWORD ignored = 0;
+    VirtualProtect(wave_slot, sizeof(*wave_slot), wave_protection, &ignored);
+    DWORD allocate_protection = 0;
+    if (!VirtualProtect(allocate_slot, sizeof(*allocate_slot), PAGE_READWRITE,
+                        &allocate_protection)) return false;
+    *allocate_slot = reinterpret_cast<void*>(&hook_miles_allocate_sample);
+    VirtualProtect(allocate_slot, sizeof(*allocate_slot), allocate_protection, &ignored);
+    FlushInstructionCache(GetCurrentProcess(), wave_slot, sizeof(*wave_slot));
+    FlushInstructionCache(GetCurrentProcess(), allocate_slot, sizeof(*allocate_slot));
+    log_line("Miles driver hooks installed waveOutOpen=%p allocate_sample=%p",
+             wave_slot, allocate_slot);
+    return true;
+}
+
 int player_index_from_handle(void* handle, std::uint8_t* image_base) {
     if (!g_profile) return -1;
     auto handles = reinterpret_cast<void**>(image_base + g_profile->handles_rva);
@@ -544,6 +621,26 @@ bool install_dispatch_hook() {
     return true;
 }
 
+void silence_existing_pc_music() {
+    if (!g_profile || !g_dispatch_trampoline) return;
+    auto* image_base = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    auto** handles = reinterpret_cast<void**>(image_base + g_profile->handles_rva);
+    unsigned silenced = 0;
+    for (int player = 0; player != sequence_slots; ++player) {
+        if (!handles[player]) continue;
+        for (std::uint8_t channel = 0; channel != 16; ++channel) {
+            std::uint8_t sustain[]{std::uint8_t(0xB0 | channel), 64, 0};
+            std::uint8_t all_sound_off[]{std::uint8_t(0xB0 | channel), 120, 0};
+            std::uint8_t all_notes_off[]{std::uint8_t(0xB0 | channel), 123, 0};
+            reinterpret_cast<DispatchFn>(g_dispatch_trampoline)(handles[player], sustain);
+            reinterpret_cast<DispatchFn>(g_dispatch_trampoline)(handles[player], all_sound_off);
+            reinterpret_cast<DispatchFn>(g_dispatch_trampoline)(handles[player], all_notes_off);
+        }
+        ++silenced;
+    }
+    log_line("persistent PC music shutdown handles=%u; no PC music fallback", silenced);
+}
+
 bool initialize_impl(HMODULE self) {
     InitializeCriticalSection(&g_log_lock);
     InitializeCriticalSection(&g_provenance_lock);
@@ -561,7 +658,9 @@ bool initialize_impl(HMODULE self) {
     log_line("audio hook loaded image=%p assets=%s sequences=%zu", GetModuleHandleW(nullptr),
              assets_found ? g_asset_root : "missing", g_sequences.size());
     if (!catalog_loaded) log_line("sequence catalog unavailable");
+    if (!install_miles_output_hook()) return false;
     if (!install_dispatch_hook()) return false;
+    silence_existing_pc_music();
     if (!install_file_provenance_hook()) return false;
     HANDLE thread = CreateThread(nullptr, 0, renderer_thread, nullptr, 0, nullptr);
     if (!thread) { log_line("renderer thread creation failed"); return false; }

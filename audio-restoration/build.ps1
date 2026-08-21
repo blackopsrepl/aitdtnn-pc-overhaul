@@ -15,9 +15,10 @@ $commands = @(
     ('cd /d "{0}"' -f $root),
     'cl /nologo /c /Brepro /O2 /MT /TC /DWIN32 /DNDEBUG /D_LIB /DEMU_COMPILE /DEMU_LITTLE_ENDIAN /Fo:build\core\ third_party\highly_theoretical\Core\arm.c third_party\highly_theoretical\Core\dcsound.c third_party\highly_theoretical\Core\yam.c',
     'lib /nologo /out:build\SegaCore.lib build\core\arm.obj build\core\dcsound.obj build\core\yam.obj',
-    'cl /nologo /Brepro /std:c++20 /O2 /EHsc /MT /Isrc /Fo:build\native\ /Fe:build\music-runtime-tests.exe tests\music_runtime_tests.cpp /link /Brepro',
+    'cl /nologo /Brepro /std:c++20 /O2 /EHsc /MT /Isrc /Fo:build\native\ /Fe:build\music-runtime-tests.exe tests\music_runtime_tests.cpp src\miles_stream.cpp /link /Brepro',
     'build\music-runtime-tests.exe',
-    'cl /nologo /Brepro /std:c++20 /O2 /EHsc /MT /DWIN32 /Ithird_party\highly_theoretical\Core /Fo:build\native\ /LD /Fe:bin\aitd4-audio-hook.dll src\audio_hook.cpp src\audio_renderer.cpp build\SegaCore.lib /link /Brepro /INCREMENTAL:NO /DEF:src\audio_hook.def /IMPLIB:build\native\aitd4-audio-hook.lib winmm.lib',
+    'cl /nologo /Brepro /std:c++20 /O2 /EHsc /MT /DWIN32 /Ithird_party\highly_theoretical\Core /Isrc /Fo:build\native\ /Fe:build\renderer-smoke.exe tests\renderer_smoke.cpp src\audio_renderer.cpp build\SegaCore.lib /link /Brepro',
+    'cl /nologo /Brepro /std:c++20 /O2 /EHsc /MT /DWIN32 /Ithird_party\highly_theoretical\Core /Fo:build\native\ /LD /Fe:bin\aitd4-audio-hook.dll src\audio_hook.cpp src\audio_renderer.cpp src\miles_stream.cpp build\SegaCore.lib /link /Brepro /INCREMENTAL:NO /DEF:src\audio_hook.def /IMPLIB:build\native\aitd4-audio-hook.lib',
     'dumpbin /nologo /exports bin\aitd4-audio-hook.dll > build\audio-hook-exports.txt'
 ) -join ' && '
 
