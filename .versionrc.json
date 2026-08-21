@@ -1,0 +1,17 @@
+{
+  "packageFiles": [
+    {
+      "filename": "VERSION",
+      "type": "plain-text"
+    }
+  ],
+  "bumpFiles": [
+    {
+      "filename": "VERSION",
+      "type": "plain-text"
+    }
+  ],
+  "compareUrlFormat": "https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/{{previousTag}}...{{currentTag}}",
+  "commitUrlFormat": "https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/{{hash}}",
+  "issueUrlFormat": "https://github.com/blackopsrepl/aitdtnn-pc-overhaul/issues/{{id}}"
+}
