@@ -2,13 +2,16 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## Unreleased
+## [0.5.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.4.0...v0.5.0) (2026-08-22)
+
+### Bug Fixes
+
+* **audio:** preserve shared-bank music transitions 13f2f16
 
 ### Documentation
 
 * clarify the game-side DSEQ scheduling and Dreamcast Manatee/AICA rendering boundary
-* distinguish an unresolved layered music slot from an entire gameplay scene
-* document the complete 69-container collision audit and identify over-strict slot suppression
+* document the complete 69-container collision audit
 
 ### Fixed
 
