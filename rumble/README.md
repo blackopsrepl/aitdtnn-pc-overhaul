@@ -29,3 +29,9 @@ extern "C" DWORD WINAPI AITD4_RumbleInitialize(void* reserved);
 
 The shared loader must initialize this module after audio restoration and the
 renderer, before entering the original game entrypoint.
+
+For source navigation, `src/hook_main.cpp` lists three fragments in execution
+order: runtime validation/configuration, the timed controller worker, then hook
+installation and lifecycle. Platform-independent request decoding lives in
+`rumble_protocol.hpp` and is covered by `tests/rumble_protocol_test.cpp`. See the
+[codebase guide](../docs/CODEBASE.md) for the complete startup path.

@@ -47,7 +47,7 @@ are distinguishable by DSEQ, two pairs have byte-identical DSEQ payloads, and
 one pair shares one payload but has distinct alternatives. The load association
 preserves their actual filenames even when every content-based identifier is
 identical. See the report's complete collision audit for the named pairs and
-retained-log findings.
+retained-log findings in [the audio architecture report](../docs/audio-architecture.md).
 
 No copyrighted game or Dreamcast assets are included. The combined overhaul
 wizard derives the required runtime catalog locally from a Dreamcast disc image
@@ -72,3 +72,10 @@ Build this module through the monorepo root `build.ps1`. The combined
 `build-release.ps1` packages its asset builder into the single overhaul wizard.
 The code is GPL-3.0-only because it incorporates the GPLv3 Highly Theoretical
 AICA emulation core; see `LICENSE.txt` and `THIRD_PARTY.md`.
+
+For source navigation, start at `src/audio_hook.cpp`: it is a short ordered map
+of catalog, identity, dispatch and lifecycle fragments. `audio_renderer.cpp`
+owns Dreamcast synthesis; `miles_stream.cpp` owns delivery to the game's audio
+device. The asset-builder entrypoint is `tools/build_assets.py`, with filesystem,
+disc-format, extraction and legacy-recovery concerns under `tools/asset_builder`.
+The beginner-oriented overview is [docs/CODEBASE.md](../docs/CODEBASE.md).

@@ -1,5 +1,9 @@
 #pragma once
 
+// Content-based scene identity helpers. Exact map/DSEQ collisions exist, so
+// these routines return unresolved when bytes cannot prove one owner; the hook
+// then relies on the filename captured at the game's own container loader.
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>

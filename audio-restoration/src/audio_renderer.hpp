@@ -1,5 +1,8 @@
 #pragma once
 
+// Lifetime-safe C++ boundary around the Dreamcast emulator: initialize once,
+// replace banks as scenes change, dispatch game events, then render PCM blocks.
+
 #include <cstdint>
 
 namespace aitd4 {

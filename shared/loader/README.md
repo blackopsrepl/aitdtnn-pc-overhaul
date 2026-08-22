@@ -26,3 +26,9 @@ Static verification:
 
 The loader neither contains nor creates copyrighted assets. It is not an
 installer and has no shortcut or launcher behavior.
+
+For source navigation, `src/version_proxy.cpp` is a short map of three ordered
+fragments: Version API forwarding/validation, module startup and entrypoint
+handoff, then generated export stubs and `DllMain`. The repository
+[codebase guide](../../docs/CODEBASE.md) explains the Windows terms and the full
+runtime chain for readers who do not know C++.

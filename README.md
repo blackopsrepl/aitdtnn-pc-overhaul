@@ -241,6 +241,8 @@ and presentation acceptance work is documented in [`REPORT.md`](REPORT.md).
 The renderer's investigation and movie inventory are available in
 [`renderer/docs/fmv-audit.md`](renderer/docs/fmv-audit.md), with presentation
 design notes in [`renderer/docs/crt-design.md`](renderer/docs/crt-design.md).
+The technical report is now split into focused subsystem reports, all linked
+from [`REPORT.md`](REPORT.md).
 
 ## Building from source
 
@@ -254,7 +256,10 @@ Windows machine with Visual Studio 2022 C++ tools:
 ```
 
 `build.ps1` builds and tests the maintained audio, renderer, rumble, and loader
-sources. `build-release.ps1` validates the recorded working payload, packages
+sources. It also enforces the repository rule that every governed first-party
+file remains below 300 physical lines. [`docs/CODEBASE.md`](docs/CODEBASE.md) is
+the reader-oriented source map and includes a short C++/hooking primer.
+`build-release.ps1` validates the recorded working payload, packages
 the asset builder, compiles the Inno Setup wizard, and creates the release
 artifacts. Use `-Development` only when a test installer from an uncommitted
 tree is required.

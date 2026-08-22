@@ -1,5 +1,8 @@
 #pragma once
 
+// Stable C ABI exported by the renderer. Fixed-width fields plus a structure
+// size let separately built harnesses reject incompatible diagnostic layouts.
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 

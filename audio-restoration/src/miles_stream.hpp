@@ -1,5 +1,9 @@
 #pragma once
 
+// Miles exposes opaque C handles. These declarations preserve its exact 32-bit
+// calling conventions; a mismatch would corrupt the caller's stack. MilesStream
+// wraps that raw ABI as one double-buffered PCM sink.
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 

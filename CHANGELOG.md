@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## Unreleased
+
+### Changed
+
+* split every oversized first-party implementation, installer and test file into responsibility-based modules below 300 physical lines
+* add a build-enforced source-layout limit so monolithic files cannot silently return
+* add reader-oriented module headers and a plain-language codebase guide for contributors unfamiliar with C++ or Windows hooking
+* split the technical report into linked audio, renderer, and rumble/installer/validation documents and refresh every component README
+
 ## [0.5.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.4.0...v0.5.0) (2026-08-22)
 
 ### Bug Fixes

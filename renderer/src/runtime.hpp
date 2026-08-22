@@ -1,5 +1,8 @@
 #pragma once
 
+// Configuration and diagnostic vocabulary shared by the DLL entrypoint and the
+// graphics implementation. This header deliberately performs no OpenGL work.
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>

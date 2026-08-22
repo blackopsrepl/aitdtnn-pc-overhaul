@@ -1,3 +1,6 @@
+// Renderer DLL lifecycle. DllMain runs under the Windows loader lock and only
+// records state. The proxy later calls AITD4_Initialize in a safe context, where
+// configuration can be read and verified graphics hooks can be installed.
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 

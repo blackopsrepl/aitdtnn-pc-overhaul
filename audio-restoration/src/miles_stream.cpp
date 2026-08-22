@@ -1,3 +1,6 @@
+// Bridge between Dreamcast PCM and the game's Miles Sound System. Miles owns
+// the real device and mixer; this adapter keeps one double-buffered sample fed
+// by AudioRenderer, preserving native effects and movie audio in the same mix.
 #include "miles_stream.hpp"
 
 #include <algorithm>

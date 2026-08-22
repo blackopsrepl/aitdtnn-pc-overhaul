@@ -12,6 +12,10 @@ $loaderRoot = Join-Path $repoRoot 'shared\loader'
 $sourceRoot = Join-Path $loaderRoot 'src'
 $buildRoot = Join-Path $repoRoot 'build\shared-loader'
 
+# Keep large responsibilities discoverable instead of allowing monolithic files
+# to grow back after this refactor.
+& (Join-Path $repoRoot 'tools\Verify-SourceLayout.ps1')
+
 if (-not $SkipModules) {
     & (Join-Path $audioRoot 'build.ps1')
     if ($LASTEXITCODE -ne 0) {
@@ -98,6 +102,7 @@ foreach ($componentRoot in $rendererRoot, $rumbleRoot) {
 
 foreach ($powerShellSource in @(
     (Join-Path $repoRoot 'installer\Manage-Overhaul.ps1'),
+    (Join-Path $repoRoot 'installer\Manage-Overhaul.Core.ps1'),
     (Join-Path $repoRoot 'installer\tests\Test-InstallerLifecycle.ps1')
 )) {
     $tokens = $null

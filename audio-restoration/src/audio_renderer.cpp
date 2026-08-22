@@ -1,3 +1,7 @@
+// Dreamcast sound backend. The game still decides what notes happen and when.
+// This file loads the real Manatee driver and bank into an AICA emulator, feeds
+// it translated events, and renders stereo PCM. It never opens an audio device;
+// miles_stream.cpp submits those frames through the game's existing Miles mix.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>

@@ -1,5 +1,9 @@
 #pragma once
 
+// Platform-independent Dreamcast vibration decoding. Selector/value calls are
+// reconstructed into pdVib commands and mapped to XInput motor strength here;
+// timing, threads and executable hooks remain in the runtime fragments.
+
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

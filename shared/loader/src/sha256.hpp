@@ -1,5 +1,8 @@
 #pragma once
 
+// Allocation-free SHA-256 used before any overhaul DLL is trusted. Avoiding the
+// C++ runtime and optional crypto providers keeps the earliest loader path small.
+
 #include <cstddef>
 #include <cstdint>
 

@@ -1,5 +1,8 @@
 #pragma once
 
+// Hash-verified addresses inside supported alone4.exe builds. These are not
+// portable symbols: an address is safe only for the exact executable beside it.
+
 #include <cstddef>
 #include <cstdint>
 

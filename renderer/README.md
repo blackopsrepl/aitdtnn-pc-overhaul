@@ -64,3 +64,10 @@ callsites, unresolved script-node inventory and evidence boundaries are
 documented in [docs/fmv-audit.md](docs/fmv-audit.md).
 The original presentation design is documented in
 [docs/crt-design.md](docs/crt-design.md).
+
+For source navigation, `src/graphics_hook.cpp` is an ordered table of contents:
+its named fragments proceed from platform declarations through window/input,
+movies, OpenGL setup, CRT processing, framebuffer presentation and API routing.
+They deliberately compile as one translation unit so shared process state and
+hook addresses do not change. See the repository's
+[codebase guide](../docs/CODEBASE.md) for a plain-language walkthrough.

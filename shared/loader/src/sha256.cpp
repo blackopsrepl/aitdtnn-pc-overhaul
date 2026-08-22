@@ -1,3 +1,6 @@
+// SHA-256 processes input in 64-byte blocks and mixes eight 32-bit state words.
+// finish() adds standard padding and serializes them; sha256_test.cpp checks
+// known-answer vectors because executable hashes are a loader safety boundary.
 #include "sha256.hpp"
 
 #include <cstring>

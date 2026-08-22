@@ -1,5 +1,8 @@
 #pragma once
 
+// Narrow boundary of the graphics hook unit. Callers can install it and inspect
+// diagnostics, but cannot mutate its tightly shared OpenGL and Bink state.
+
 #include "renderer_api.hpp"
 
 namespace aitd4 {

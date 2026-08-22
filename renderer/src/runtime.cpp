@@ -1,3 +1,6 @@
+// Renderer configuration and diagnostics. Values from the installed INI file
+// are normalized here so graphics_hook can concentrate on frame interception
+// and presentation rather than configuration policy.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>

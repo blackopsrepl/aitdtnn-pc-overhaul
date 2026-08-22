@@ -1,5 +1,9 @@
 #pragma once
 
+// Pure state rules for one persistent game music player. A sequence pointer can
+// survive while a room reloads its shared bank, so bank generation is part of
+// binding identity. Keeping the rule free of Windows code makes it testable.
+
 #include <array>
 #include <cstdint>
 
