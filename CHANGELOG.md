@@ -2,14 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
-## Unreleased
+## [0.5.1](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.5.0...v0.5.1) (2026-08-22)
 
 ### Changed
 
-* split every oversized first-party implementation, installer and test file into responsibility-based modules below 300 physical lines
+* split every oversized first-party implementation, installer, and test file into responsibility-based modules below 300 physical lines
 * add a build-enforced source-layout limit so monolithic files cannot silently return
-* add reader-oriented module headers and a plain-language codebase guide for contributors unfamiliar with C++ or Windows hooking
-* split the technical report into linked audio, renderer, and rumble/installer/validation documents and refresh every component README
+* split the asset builder, installer transaction manager, and Inno wizard into independently navigable modules
+
+### Documentation
+
+* add reader-oriented source comments and a plain-language codebase guide for contributors unfamiliar with C++ or Windows hooking
+* split the technical report into linked audio, renderer, and rumble/installer/validation documents
+* refresh the root, audio, renderer, rumble, and shared-loader documentation surfaces
+
+### Validation
+
+* prove the rearranged native sources reproduce all four 0.5.0 runtime DLLs byte-for-byte
+* validate direct and packaged extraction of 69 scene banks and 161 sequences
+* pass the full install, upgrade-refusal, rollback, uninstall, and modified-tree preservation lifecycle
 
 ## [0.5.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.4.0...v0.5.0) (2026-08-22)
 

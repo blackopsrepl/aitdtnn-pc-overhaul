@@ -6,7 +6,7 @@ not support the Steam port. It keeps the original PC game, story, sound
 effects, movies and game data intact while restoring selected Dreamcast-era
 features and modernizing presentation and controller support.
 
-Current integrated version: **0.5.0**.
+Current integrated version: **0.5.1**.
 
 ## In-game preview
 
@@ -151,7 +151,7 @@ launcher, or create a shortcut.
 
 ### Which PC versions work?
 
-Version 0.5.0 supports the verified English 15-slot/no-CD executable and the
+Version 0.5.1 supports the verified English 15-slot/no-CD executable and the
 stock retail PC CD executable. The installer checks the executable's SHA-256
 hash before installing address-sensitive modules, so other builds, repacks, and
 storefront releases are rejected rather than patched unsafely. See the two
