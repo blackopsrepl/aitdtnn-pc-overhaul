@@ -3,65 +3,125 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace aitd4::music_identity {
 
 enum class Evidence {
     none,
-    map_unique,
-    sequence_unique,
-    file_load,
-    ambiguous,
+    loader_identity,
+    identity_missing,
+    validation_failed,
 };
 
-struct Candidate {
-    std::string_view container;
-    bool sequence_match{};
-    std::uint64_t load_serial{};
+struct LoadedIdentity {
+    const void* sequence_base{};
+    const void* sequence_table{};
+    std::string container;
+    std::uint64_t serial{};
 };
 
-struct Resolution {
-    int index{-1};
-    Evidence evidence{Evidence::none};
+struct LoadedBankIdentity {
+    int bank_id{-1};
+    std::string container;
+    std::uint64_t serial{};
 };
 
-inline Resolution resolve(std::span<const Candidate> candidates) {
-    if (candidates.empty()) return {};
-
-    int sequence_index = -1;
-    int sequence_count = 0;
-    for (std::size_t index = 0; index != candidates.size(); ++index) {
-        if (!candidates[index].sequence_match) continue;
-        ++sequence_count;
-        sequence_index = static_cast<int>(index);
+class LoadedIdentityRegistry {
+public:
+    std::uint64_t record(const void* sequence_base, const void* sequence_table,
+                         std::string_view container) {
+        const auto serial = ++serial_;
+        entries_.push_back({sequence_base, sequence_table, std::string(container), serial});
+        if (entries_.size() > 256) entries_.erase(entries_.begin());
+        return serial;
     }
-    if (sequence_count == 1) return {sequence_index, Evidence::sequence_unique};
 
-    // File provenance is the tie-breaker for retail containers whose maps and
-    // DSEQ payloads are genuinely identical. If any sequence matched, do not
-    // let a load from an unrelated map-identical candidate override that set.
-    std::uint64_t latest = 0;
-    for (const auto& candidate : candidates) {
-        if (sequence_count != 0 && !candidate.sequence_match) continue;
-        latest = std::max(latest, candidate.load_serial);
-    }
-    if (latest != 0) {
-        int latest_index = -1;
-        for (std::size_t index = 0; index != candidates.size(); ++index) {
-            if ((sequence_count != 0 && !candidates[index].sequence_match) ||
-                candidates[index].load_serial != latest) continue;
-            if (latest_index >= 0) return {-1, Evidence::ambiguous};
-            latest_index = static_cast<int>(index);
+    std::string find(const void* sequence_base, const void* sequence_table) const {
+        std::string result;
+        std::uint64_t latest = 0;
+        for (const auto& entry : entries_) {
+            if (entry.sequence_base != sequence_base ||
+                entry.sequence_table != sequence_table || entry.serial < latest) continue;
+            latest = entry.serial;
+            result = entry.container;
         }
-        return {latest_index, Evidence::file_load};
+        return result;
     }
 
-    if (candidates.size() == 1) return {0, Evidence::map_unique};
-    return {-1, Evidence::ambiguous};
+private:
+    std::vector<LoadedIdentity> entries_;
+    std::uint64_t serial_{};
+};
+
+class LoadedBankRegistry {
+public:
+    std::uint64_t record(int bank_id, std::string_view container) {
+        const auto serial = ++serial_;
+        entries_.push_back({bank_id, std::string(container), serial});
+        if (entries_.size() > 256) entries_.erase(entries_.begin());
+        return serial;
+    }
+
+    std::string find(int bank_id) const {
+        std::string result;
+        std::uint64_t latest = 0;
+        for (const auto& entry : entries_) {
+            if (entry.bank_id != bank_id || entry.serial < latest) continue;
+            latest = entry.serial;
+            result = entry.container;
+        }
+        return result;
+    }
+
+    std::uint64_t serial(int bank_id) const {
+        std::uint64_t latest = 0;
+        for (const auto& entry : entries_)
+            if (entry.bank_id == bank_id) latest = std::max(latest, entry.serial);
+        return latest;
+    }
+
+private:
+    std::vector<LoadedBankIdentity> entries_;
+    std::uint64_t serial_{};
+};
+
+inline std::uint16_t read_be16(const std::uint8_t* bytes) {
+    return static_cast<std::uint16_t>((static_cast<std::uint16_t>(bytes[0]) << 8) |
+                                      static_cast<std::uint16_t>(bytes[1]));
+}
+
+inline std::uint32_t read_be32(const std::uint8_t* bytes) {
+    return (static_cast<std::uint32_t>(bytes[0]) << 24) |
+           (static_cast<std::uint32_t>(bytes[1]) << 16) |
+           (static_cast<std::uint32_t>(bytes[2]) << 8) |
+           static_cast<std::uint32_t>(bytes[3]);
+}
+
+inline bool loaded_dseq_matches(std::span<const std::uint8_t> asset,
+                                std::span<const std::uint8_t> loaded) {
+    constexpr std::size_t header_size = 0x10;
+    if (asset.size() < header_size || loaded.size() < asset.size() ||
+        !std::equal(asset.begin(), asset.begin() + header_size, loaded.begin()))
+        return false;
+
+    const auto sequence_count = read_be16(asset.data() + 0x0E);
+    const auto table_end = header_size + static_cast<std::size_t>(sequence_count) * 4;
+    if (sequence_count == 0 || table_end > asset.size()) return false;
+
+    // The PC parser converts the DSEQ offset table from big endian to native
+    // little endian in place. All other bytes remain identical to the source.
+    for (std::size_t at = header_size; at != table_end; at += 4) {
+        std::uint32_t loaded_offset{};
+        std::memcpy(&loaded_offset, loaded.data() + at, sizeof(loaded_offset));
+        if (loaded_offset != read_be32(asset.data() + at)) return false;
+    }
+    return std::equal(asset.begin() + table_end, asset.end(), loaded.begin() + table_end);
 }
 
 inline std::optional<std::string> container_from_path(std::string_view path) {
@@ -90,10 +150,9 @@ inline std::optional<std::string> container_from_path(std::string_view path) {
 
 inline const char* evidence_name(Evidence evidence) {
     switch (evidence) {
-    case Evidence::map_unique: return "map-unique";
-    case Evidence::sequence_unique: return "sequence-unique";
-    case Evidence::file_load: return "file-load";
-    case Evidence::ambiguous: return "ambiguous";
+    case Evidence::loader_identity: return "loader-identity";
+    case Evidence::identity_missing: return "identity-missing";
+    case Evidence::validation_failed: return "validation-failed";
     default: return "none";
     }
 }

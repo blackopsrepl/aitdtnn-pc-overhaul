@@ -44,17 +44,11 @@ struct ExecutableProfile {
     std::uintptr_t inverse_maps_rva;
 };
 
-struct LoadProvenance {
-    std::string container;
-    std::string path;
-    std::uint64_t serial{};
-};
-
 struct ContainerResolution {
-    const ContainerIdentity* identity{};
+    const ContainerIdentity* sequence_identity{};
+    const ContainerIdentity* bank_identity{};
     const SequenceAsset* sequence{};
     music_identity::Evidence evidence{music_identity::Evidence::none};
-    std::uint64_t load_serial{};
     int candidate_count{};
 };
 
@@ -80,16 +74,16 @@ std::array<void*, sequence_slots> g_last_sequence_table{};
 std::array<std::uint8_t*, sequence_slots> g_last_inverse_map{};
 std::array<int, sequence_slots> g_last_bank_id{-1, -1, -1, -1, -1};
 std::array<int, sequence_slots> g_last_map_selector{-1, -1, -1, -1, -1};
+std::array<std::uint64_t, sequence_slots> g_last_bank_serial{};
 std::array<std::string, sequence_slots> g_last_container{};
 std::array<std::array<std::uint8_t, 16>, sequence_slots> g_channel_program{};
 std::array<bool, sequence_slots> g_renderer_bound{};
-CRITICAL_SECTION g_provenance_lock{};
-std::vector<LoadProvenance> g_load_provenance;
-std::uint64_t g_load_serial{};
+CRITICAL_SECTION g_identity_lock{};
+music_identity::LoadedIdentityRegistry g_identity_registry;
+music_identity::LoadedBankRegistry g_bank_registry;
+void* g_container_loader_trampoline{};
 
-using CreateFileAFn = HANDLE(WINAPI*)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES,
-                                     DWORD, DWORD, HANDLE);
-CreateFileAFn g_create_file_a = nullptr;
+using ContainerLoaderFn = void* (__cdecl*)(const char*);
 using MilesWaveOutOpenFn = std::int32_t (WINAPI*)(aitd4::MilesDriver*, LPHWAVEOUT*,
                                                   std::int32_t, LPWAVEFORMAT);
 MilesWaveOutOpenFn g_miles_wave_out_open{};
@@ -244,96 +238,112 @@ bool readable(const void* pointer, std::size_t size) {
     return start + size >= start && start + size <= end;
 }
 
-bool sequence_matches(const SequenceAsset& asset, const std::uint8_t* live) {
-    constexpr std::size_t probe = 32;
-    if (asset.bytes.size() >= probe && readable(live, probe) &&
-        std::memcmp(live, asset.bytes.data(), probe) == 0) return true;
-    return asset.bytes.size() >= 0x24 + probe && readable(live, probe) &&
-           std::memcmp(live, asset.bytes.data() + 0x24, probe) == 0;
+bool sequence_matches(const SequenceAsset& asset, const std::uint8_t* live_base) {
+    if (asset.bytes.empty() || !readable(live_base, asset.bytes.size())) return false;
+    return music_identity::loaded_dseq_matches(
+        asset.bytes, std::span<const std::uint8_t>(live_base, asset.bytes.size()));
 }
 
-std::uint64_t load_serial_for(const std::string& container) {
-    std::uint64_t result = 0;
-    EnterCriticalSection(&g_provenance_lock);
-    for (const auto& item : g_load_provenance)
-        if (item.container == container) result = std::max(result, item.serial);
-    LeaveCriticalSection(&g_provenance_lock);
+std::string loaded_container_for(const void* sequence_base, const void* sequence_table) {
+    std::string result;
+    EnterCriticalSection(&g_identity_lock);
+    result = g_identity_registry.find(sequence_base, sequence_table);
+    LeaveCriticalSection(&g_identity_lock);
     return result;
+}
+
+std::string loaded_bank_for(int bank_id) {
+    std::string result;
+    EnterCriticalSection(&g_identity_lock);
+    result = g_bank_registry.find(bank_id);
+    LeaveCriticalSection(&g_identity_lock);
+    return result;
+}
+
+std::uint64_t loaded_bank_serial_for(int bank_id) {
+    std::uint64_t result = 0;
+    EnterCriticalSection(&g_identity_lock);
+    result = g_bank_registry.serial(bank_id);
+    LeaveCriticalSection(&g_identity_lock);
+    return result;
+}
+
+const ContainerIdentity* container_identity_for(std::string_view container) {
+    for (const auto& identity : g_containers)
+        if (identity.container == container) return &identity;
+    return nullptr;
 }
 
 ContainerResolution resolve_container(const std::uint8_t* inverse_map,
                                       int map_selector, int bank_id,
+                                      const void* sequence_base,
                                       const void* sequence_table) {
     ContainerResolution result;
+    const auto sequence_container = loaded_container_for(sequence_base, sequence_table);
+    const auto bank_container = loaded_bank_for(bank_id);
+    if (sequence_container.empty() || bank_container.empty()) {
+        result.evidence = music_identity::Evidence::identity_missing;
+        return result;
+    }
+    result.evidence = music_identity::Evidence::validation_failed;
     if (!inverse_map || map_selector < 0) return result;
     const auto map_address = reinterpret_cast<std::uintptr_t>(inverse_map);
     const auto displacement = static_cast<std::uintptr_t>(map_selector) * 128;
     if (map_address < displacement) return result;
     const auto* live_maps = reinterpret_cast<const std::uint8_t*>(map_address - displacement);
-    const auto* live_sequence = reinterpret_cast<const std::uint8_t*>(sequence_table);
+    const auto* live_sequence = reinterpret_cast<const std::uint8_t*>(sequence_base);
 
-    std::vector<const ContainerIdentity*> identities;
-    std::vector<const SequenceAsset*> sequences;
-    std::vector<music_identity::Candidate> candidates;
-    for (const auto& identity : g_containers) {
-        if (identity.bank_id != bank_id ||
-            map_selector >= static_cast<int>(identity.maps.size())) continue;
-        const auto map_bytes = identity.maps.size() * sizeof(identity.maps[0]);
-        if (!readable(live_maps, map_bytes) ||
-            std::memcmp(live_maps, identity.maps.data(), map_bytes) != 0) continue;
-
-        const SequenceAsset* matching_sequence = nullptr;
-        if (live_sequence) {
-            for (const auto& asset : g_sequences) {
-                if (asset.container == identity.container && sequence_matches(asset, live_sequence)) {
-                    matching_sequence = &asset;
-                    break;
-                }
-            }
-        }
-        identities.push_back(&identity);
-        sequences.push_back(matching_sequence);
-        candidates.push_back({identity.container, matching_sequence != nullptr,
-                              load_serial_for(identity.container)});
+    result.sequence_identity = container_identity_for(sequence_container);
+    result.bank_identity = container_identity_for(bank_container);
+    if (!result.sequence_identity || !result.bank_identity ||
+        result.bank_identity->bank_id != bank_id ||
+        map_selector >= static_cast<int>(result.bank_identity->maps.size())) {
+        log_line("loader identity validation failed stage=identity sequence=%s bank=%s "
+                 "base=%p table=%p bank_id=%d selector=%d",
+                 sequence_container.c_str(), bank_container.c_str(), sequence_base,
+                 sequence_table, bank_id, map_selector);
+        result.sequence_identity = nullptr;
+        result.bank_identity = nullptr;
+        return result;
     }
 
-    result.candidate_count = static_cast<int>(candidates.size());
-    const auto resolved = music_identity::resolve(candidates);
-    result.evidence = resolved.evidence;
-    if (resolved.index < 0) return result;
-    const auto index = static_cast<std::size_t>(resolved.index);
-    result.identity = identities[index];
-    result.sequence = sequences[index];
-    result.load_serial = candidates[index].load_serial;
+    for (const auto& asset : g_sequences) {
+        if (asset.container != sequence_container ||
+            !sequence_matches(asset, live_sequence)) continue;
+        result.sequence = &asset;
+        break;
+    }
+    if (!result.sequence) {
+        log_line("loader identity validation failed stage=dseq sequence=%s bank=%s "
+                 "base=%p table=%p bank_id=%d selector=%d",
+                 sequence_container.c_str(), bank_container.c_str(), sequence_base,
+                 sequence_table, bank_id, map_selector);
+        result.sequence_identity = nullptr;
+        result.bank_identity = nullptr;
+        return result;
+    }
+
+    const auto map_bytes = result.bank_identity->maps.size() *
+                           sizeof(result.bank_identity->maps[0]);
+    if (!readable(live_maps, map_bytes) ||
+        std::memcmp(live_maps, result.bank_identity->maps.data(), map_bytes) != 0) {
+        log_line("loader identity validation failed stage=map sequence=%s bank=%s "
+                 "base=%p table=%p bank_id=%d selector=%d",
+                 sequence_container.c_str(), bank_container.c_str(), sequence_base,
+                 sequence_table, bank_id, map_selector);
+        result.sequence_identity = nullptr;
+        result.bank_identity = nullptr;
+        result.sequence = nullptr;
+        return result;
+    }
+
+    result.evidence = music_identity::Evidence::loader_identity;
+    result.candidate_count = 1;
     return result;
 }
 
 bool known_container(const std::string& container) {
-    for (const auto& identity : g_containers)
-        if (identity.container == container) return true;
-    return false;
-}
-
-void record_music_load(const char* path) {
-    if (!path) return;
-    const auto container = music_identity::container_from_path(path);
-    if (!container || !known_container(*container)) return;
-    std::uint64_t serial = 0;
-    EnterCriticalSection(&g_provenance_lock);
-    serial = ++g_load_serial;
-    g_load_provenance.push_back({*container, path, serial});
-    if (g_load_provenance.size() > 256) g_load_provenance.erase(g_load_provenance.begin());
-    LeaveCriticalSection(&g_provenance_lock);
-    log_line("music load serial=%llu container=%s path=%s",
-             static_cast<unsigned long long>(serial), container->c_str(), path);
-}
-
-HANDLE WINAPI hook_create_file_a(LPCSTR path, DWORD access, DWORD sharing,
-                                 LPSECURITY_ATTRIBUTES security, DWORD creation,
-                                 DWORD flags, HANDLE template_file) {
-    const auto result = g_create_file_a(path, access, sharing, security, creation, flags, template_file);
-    if (result != INVALID_HANDLE_VALUE) record_music_load(path);
-    return result;
+    return container_identity_for(container) != nullptr;
 }
 
 void** find_main_import(const char* dll_name, const char* function_name) {
@@ -362,20 +372,93 @@ void** find_main_import(const char* dll_name, const char* function_name) {
     return nullptr;
 }
 
-bool install_file_provenance_hook() {
-    auto** slot = find_main_import("KERNEL32.dll", "CreateFileA");
-    if (!slot) {
-        log_line("music load provenance hook rejected: CreateFileA import unavailable");
+void* __cdecl hook_container_loader(const char* path) {
+    struct StateSnapshot { const void* table; const void* base; bool active; };
+    std::array<StateSnapshot, sequence_slots> before{};
+    auto* image_base = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    if (g_profile) {
+        for (int player = 0; player != sequence_slots; ++player) {
+            auto* state = image_base + g_profile->sequence_state_rva + player * 0x144;
+            before[player] = {*reinterpret_cast<void**>(state + 0x120),
+                              *reinterpret_cast<void**>(state + 0x124),
+                              state[0x134] != 0};
+        }
+    }
+
+    const auto container = music_identity::container_from_path(path ? path : "");
+    const auto result = reinterpret_cast<ContainerLoaderFn>(g_container_loader_trampoline)(path);
+    if (!container || !known_container(*container) || !g_profile) return result;
+
+    const auto* loaded_identity = container_identity_for(*container);
+    std::uint64_t bank_serial = 0;
+    EnterCriticalSection(&g_identity_lock);
+    bank_serial = g_bank_registry.record(loaded_identity->bank_id, *container);
+    LeaveCriticalSection(&g_identity_lock);
+    log_line("bank identity serial=%llu bank_id=%d container=%s path=%s",
+             static_cast<unsigned long long>(bank_serial), loaded_identity->bank_id,
+             container->c_str(), path);
+
+    for (int player = 0; player != sequence_slots; ++player) {
+        auto* state = image_base + g_profile->sequence_state_rva + player * 0x144;
+        const auto table = *reinterpret_cast<void**>(state + 0x120);
+        const auto base = *reinterpret_cast<void**>(state + 0x124);
+        const bool active = state[0x134] != 0;
+        if (!base || !active || (before[player].active &&
+            table == before[player].table && base == before[player].base)) continue;
+        std::uint64_t serial = 0;
+        EnterCriticalSection(&g_identity_lock);
+        serial = g_identity_registry.record(base, table, *container);
+        LeaveCriticalSection(&g_identity_lock);
+        log_line("container identity serial=%llu player=%d container=%s base=%p table=%p path=%s",
+                 static_cast<unsigned long long>(serial), player, container->c_str(),
+                 base, table, path);
+    }
+    return result;
+}
+
+bool install_container_identity_hook() {
+    if (!g_profile) return false;
+    auto* image_base = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    const std::uint8_t signature[] = {
+        0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x1C, 0x56, 0x8B, 0x45, 0x08, 0x50, 0xE8};
+    constexpr std::size_t stolen_size = 7;
+    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image_base);
+    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS32*>(image_base + dos->e_lfanew);
+    auto* code = image_base + nt->OptionalHeader.BaseOfCode;
+    const auto code_size = static_cast<std::size_t>(nt->OptionalHeader.SizeOfCode);
+    std::uint8_t* target = nullptr;
+    for (std::size_t at = 0; at + sizeof(signature) <= code_size; ++at) {
+        if (std::memcmp(code + at, signature, sizeof(signature)) != 0) continue;
+        if (target) {
+            log_line("container identity hook rejected: loader signature is not unique");
+            return false;
+        }
+        target = code + at;
+    }
+    if (!target) {
+        log_line("container identity hook rejected: loader signature unavailable");
         return false;
     }
-    g_create_file_a = reinterpret_cast<CreateFileAFn>(*slot);
+    auto* trampoline = reinterpret_cast<std::uint8_t*>(VirtualAlloc(
+        nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+    if (!trampoline) return false;
+    std::memcpy(trampoline, target, stolen_size);
+    trampoline[7] = 0xE9;
+    *reinterpret_cast<std::int32_t*>(trampoline + 8) =
+        static_cast<std::int32_t>((target + 7) - (trampoline + 12));
+    g_container_loader_trampoline = trampoline;
     DWORD old_protection = 0;
-    if (!VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE, &old_protection)) return false;
-    *slot = reinterpret_cast<void*>(&hook_create_file_a);
+    if (!VirtualProtect(target, stolen_size, PAGE_EXECUTE_READWRITE, &old_protection))
+        return false;
+    target[0] = 0xE9;
+    *reinterpret_cast<std::int32_t*>(target + 1) = static_cast<std::int32_t>(
+        reinterpret_cast<std::uint8_t*>(&hook_container_loader) - (target + 5));
+    target[5] = 0x90;
+    target[6] = 0x90;
+    FlushInstructionCache(GetCurrentProcess(), target, stolen_size);
     DWORD ignored = 0;
-    VirtualProtect(slot, sizeof(*slot), old_protection, &ignored);
-    FlushInstructionCache(GetCurrentProcess(), slot, sizeof(*slot));
-    log_line("music load provenance hook installed at %p", slot);
+    VirtualProtect(target, stolen_size, old_protection, &ignored);
+    log_line("container identity hook installed at %p profile=%s", target, g_profile->name);
     return true;
 }
 
@@ -468,8 +551,9 @@ bool bind_player(int player, const std::uint8_t* inverse_map, int map_selector,
         return bound;
     }
 
-    const auto resolution = resolve_container(inverse_map, map_selector, bank_id, sequence_table);
-    if (!resolution.identity) {
+    const auto resolution = resolve_container(
+        inverse_map, map_selector, bank_id, sequence_base, sequence_table);
+    if (!resolution.sequence_identity || !resolution.bank_identity) {
         if (log_failure)
             log_line("scene slot=%d bank_id=%d selector=%d map=%p seqtable=%p seqbase=%p cursor=%p "
                      "match=unresolved/- evidence=%s candidates=%d bound=no",
@@ -480,16 +564,18 @@ bool bind_player(int player, const std::uint8_t* inverse_map, int map_selector,
     }
 
     const bool bound = aitd4::renderer_set_scene(
-        player, resolution.identity->container.c_str(), resolution.identity->bank_id);
-    if (bound) g_last_container[player] = resolution.identity->container;
+        player, resolution.bank_identity->container.c_str(), resolution.bank_identity->bank_id);
+    if (bound) g_last_container[player] = resolution.bank_identity->container;
     if (log_failure || bound)
         log_line("scene slot=%d bank_id=%d selector=%d map=%p seqtable=%p seqbase=%p cursor=%p "
-                 "match=%s/%s evidence=%s candidates=%d load_serial=%llu bound=%s",
+                 "sequence=%s/%s bank=%s evidence=%s candidates=%d bound=%s",
                  player, bank_id, map_selector, inverse_map, sequence_table,
-                 sequence_base, sequence_cursor, resolution.identity->container.c_str(),
+                 sequence_base, sequence_cursor,
+                 resolution.sequence_identity->container.c_str(),
                  resolution.sequence ? resolution.sequence->name.c_str() : "-",
+                 resolution.bank_identity->container.c_str(),
                  music_identity::evidence_name(resolution.evidence), resolution.candidate_count,
-                 static_cast<unsigned long long>(resolution.load_serial), bound ? "yes" : "no");
+                 bound ? "yes" : "no");
     return bound;
 }
 
@@ -523,10 +609,12 @@ int __cdecl hook_dispatch(void* handle, std::uint8_t* message) {
     const std::uint8_t status = message ? message[0] : 0;
     const std::uint8_t kind = status & 0xF0;
     const std::uint8_t channel = status & 0x0F;
+    const auto bank_serial = loaded_bank_serial_for(bank_id);
     const bool state_changed = sequence_table != g_last_sequence_table[player] ||
                                inverse_map != g_last_inverse_map[player] ||
                                bank_id != g_last_bank_id[player] ||
-                               map_selector != g_last_map_selector[player];
+                               map_selector != g_last_map_selector[player] ||
+                               bank_serial != g_last_bank_serial[player];
     if (state_changed) {
         // A Manatee player survives bank selection. Stop every outstanding
         // note before replacing its scene so no prior envelope can become the
@@ -539,6 +627,7 @@ int __cdecl hook_dispatch(void* handle, std::uint8_t* message) {
         g_last_inverse_map[player] = inverse_map;
         g_last_bank_id[player] = bank_id;
         g_last_map_selector[player] = map_selector;
+        g_last_bank_serial[player] = bank_serial;
     }
 
     if (!g_renderer_bound[player]) {
@@ -643,7 +732,7 @@ void silence_existing_pc_music() {
 
 bool initialize_impl(HMODULE self) {
     InitializeCriticalSection(&g_log_lock);
-    InitializeCriticalSection(&g_provenance_lock);
+    InitializeCriticalSection(&g_identity_lock);
     for (auto& programs : g_channel_program) programs.fill(0xFF);
     char exe_path[MAX_PATH]{};
     GetModuleFileNameA(nullptr, exe_path, MAX_PATH);
@@ -660,8 +749,8 @@ bool initialize_impl(HMODULE self) {
     if (!catalog_loaded) log_line("sequence catalog unavailable");
     if (!install_miles_output_hook()) return false;
     if (!install_dispatch_hook()) return false;
+    if (!install_container_identity_hook()) return false;
     silence_existing_pc_music();
-    if (!install_file_provenance_hook()) return false;
     HANDLE thread = CreateThread(nullptr, 0, renderer_thread, nullptr, 0, nullptr);
     if (!thread) { log_line("renderer thread creation failed"); return false; }
     const DWORD wait = WaitForSingleObject(thread, INFINITE);

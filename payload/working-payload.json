@@ -8,7 +8,7 @@
     },
     {
       "path": "game/audio-restoration/aitd4-audio-hook.dll",
-      "sha256": "A5B53C4DB80E3EE2B4C1428D1AAB8003E7B3E48E7E6330759680715C648AFB89"
+      "sha256": "567F1B0728D4F3C93593E41D7477C45441C8F9A53533F88953C8E36EB331080E"
     },
     {
       "path": "game/renderer/aitd4-renderer-hook.dll",

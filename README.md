@@ -6,7 +6,7 @@ not support the Steam port. It keeps the original PC game, story, sound
 effects, movies and game data intact while restoring selected Dreamcast-era
 features and modernizing presentation and controller support.
 
-Current integrated version: **0.3.0**.
+Current integrated version: **0.4.0**.
 
 ## In-game preview
 
@@ -23,10 +23,40 @@ overhaul active.
 
 ### Dreamcast music and ambience
 
-The overhaul restores interactive music and ambience through the Dreamcast
-release's Manatee/AICA synthesis path, using the PC engine's live gameplay
-events. PC sound effects and native FMV audio continue to use their original
-paths.
+The music you hear is synthesized by the original Dreamcast `MANATEE.DRV`, the
+Dreamcast program/sample banks, and an emulated AICA sound chip. It is then
+mixed into the game's existing Miles output. The original PC music renderer is
+suppressed and is never used as a fallback.
+
+The PC game still owns gameplay decisions: it selects music containers for the
+current state and its existing game-side DSEQ parser produces the timed musical
+events. That parser is not the PC synthesizer. A development comparison found
+the relevant PC and Dreamcast container identities, program maps, DSEQ payloads,
+and sample banks byte-identical, so retaining this game-side scheduling avoids
+rewriting scene logic while replacing the part that actually produces sound.
+
+The runtime path is:
+
+```text
+game state -> existing DSEQ parser -> restoration hook
+           -> Dreamcast Manatee driver and banks -> emulated AICA -> Miles output
+```
+
+Dreamcast DSEQ is a game-level format, not Manatee's native SMSD/SMSB format;
+renaming or wrapping it as an SMSB is not a valid alternative. If the hook
+cannot identify the exact container for one layered music slot, that slot is
+left silent instead of being sent to the PC renderer or a generic bank. PC
+sound effects and native FMV audio continue to use their original paths.
+
+Container identity is captured at the game's named MIDI-container load. The
+resulting live DSEQ object retains that exact sequence identity, while each
+shared Dreamcast bank slot follows the most recent container loaded into it.
+This distinction matters at room boundaries, where the game can intentionally
+keep an existing sequence active while replacing its program/sample bank.
+Complete DSEQ and live-map comparison validate those two identities; they are
+not alternate selection modes. Every shared-bank load also forces affected
+active players to rebind, even when their sequence pointers do not change.
+Nothing is guessed or substituted, and the PC renderer remains suppressed.
 
 The installer extracts the required audio data locally from a Dreamcast disc
 image that you provide. No Dreamcast audio, game, or other copyrighted assets
@@ -121,7 +151,7 @@ launcher, or create a shortcut.
 
 ### Which PC versions work?
 
-Version 0.3.0 supports the verified English 15-slot/no-CD executable and the
+Version 0.4.0 supports the verified English 15-slot/no-CD executable and the
 stock retail PC CD executable. The installer checks the executable's SHA-256
 hash before installing address-sensitive modules, so other builds, repacks, and
 storefront releases are rejected rather than patched unsafely. See the two
@@ -153,6 +183,14 @@ reports but cannot be guaranteed.
 The installer extracts the Dreamcast music and ambience from your image locally
 so that no copyrighted Dreamcast assets need to be distributed. The image is
 needed for installation only; rumble also does not require it at runtime.
+
+### Is this playing the PC music or independently emulating Dreamcast scenes?
+
+Neither description is precise. The game keeps its original scene selection and
+DSEQ timing logic, while the sound-producing backend is replaced by Dreamcast
+Manatee/AICA emulation using the extracted Dreamcast banks. The PC music
+renderer is suppressed. The overhaul does not recreate the game's scene logic
+or run DSEQ through Manatee's different native SMSD sequencer.
 
 ### Save games
 

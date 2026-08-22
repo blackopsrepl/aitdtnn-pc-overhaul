@@ -69,9 +69,6 @@ bool fake_render(std::int16_t* output, unsigned frames) {
 
 } // namespace
 
-using aitd4::music_identity::Candidate;
-using aitd4::music_identity::Evidence;
-
 using AudioInitializeAbi = DWORD (WINAPI*)(void*);
 static_assert(std::is_same_v<decltype(&AITD4_AudioInitialize), AudioInitializeAbi>);
 
@@ -96,36 +93,43 @@ int main() {
         assert(stream.rendered_frames() == aitd4::MilesStream::frames_per_buffer * 3);
     }
     {
-        const std::array candidates{Candidate{"jardin2", false, 0}};
-        const auto result = aitd4::music_identity::resolve(candidates);
-        assert(result.index == 0 && result.evidence == Evidence::map_unique);
+        std::array<std::uint8_t, 0x24> asset{};
+        asset[0] = 'D'; asset[1] = 'S'; asset[2] = 'E'; asset[3] = 'Q';
+        asset[0x0E] = 0; asset[0x0F] = 2;
+        asset[0x10] = 0; asset[0x11] = 0; asset[0x12] = 0; asset[0x13] = 0x18;
+        asset[0x14] = 0; asset[0x15] = 0; asset[0x16] = 0; asset[0x17] = 0x20;
+        for (std::size_t index = 0x18; index != asset.size(); ++index)
+            asset[index] = static_cast<std::uint8_t>(index);
+        auto loaded = asset;
+        loaded[0x10] = 0x18; loaded[0x11] = 0; loaded[0x12] = 0; loaded[0x13] = 0;
+        loaded[0x14] = 0x20; loaded[0x15] = 0; loaded[0x16] = 0; loaded[0x17] = 0;
+        assert(aitd4::music_identity::loaded_dseq_matches(asset, loaded));
+        loaded.back() ^= 1;
+        assert(!aitd4::music_identity::loaded_dseq_matches(asset, loaded));
     }
     {
-        const std::array candidates{
-            Candidate{"jardinc0", true, 0}, Candidate{"jardinv0", false, 0}};
-        const auto result = aitd4::music_identity::resolve(candidates);
-        assert(result.index == 0 && result.evidence == Evidence::sequence_unique);
-    }
-    {
-        // A stale/preloaded file must not override a unique live DSEQ match.
-        const std::array candidates{
-            Candidate{"jardinc0", true, 11}, Candidate{"jardinv0", false, 12}};
-        const auto result = aitd4::music_identity::resolve(candidates);
-        assert(result.index == 0 && result.evidence == Evidence::sequence_unique);
-    }
-    {
-        // These retail containers have identical maps and sequence payloads.
-        // Only the file actually requested by the game can resolve the pair.
-        const std::array candidates{
-            Candidate{"act_c12", true, 41}, Candidate{"act_c13", true, 42}};
-        const auto result = aitd4::music_identity::resolve(candidates);
-        assert(result.index == 1 && result.evidence == Evidence::file_load);
-    }
-    {
-        const std::array candidates{
-            Candidate{"inv_b1", true, 0}, Candidate{"jarding1", true, 0}};
-        const auto result = aitd4::music_identity::resolve(candidates);
-        assert(result.index == -1 && result.evidence == Evidence::ambiguous);
+        aitd4::music_identity::LoadedIdentityRegistry identities;
+        aitd4::music_identity::LoadedBankRegistry banks;
+        const auto* base = reinterpret_cast<void*>(0x1000);
+        const auto* table = reinterpret_cast<void*>(0x1010);
+        identities.record(base, table, "act_c12");
+        assert(identities.find(base, table) == "act_c12");
+        banks.record(1, "grenier1");
+        assert(banks.find(1) == "grenier1");
+        assert(banks.serial(1) == 1);
+        banks.record(1, "grenier5");
+        assert(banks.find(1) == "grenier5");
+        assert(banks.serial(1) == 2);
+        // A live sequence keeps the container that created its DSEQ object
+        // while the shared Dreamcast bank follows the most recent load.
+        assert(identities.find(base, table) == "act_c12");
+        assert(banks.find(0).empty());
+        assert(banks.serial(0) == 0);
+        identities.record(base, table, "act_c13");
+        assert(identities.find(base, table) == "act_c13");
+        assert(identities.find(base, reinterpret_cast<void*>(0x1020)).empty());
+        assert(identities.find(reinterpret_cast<void*>(0x2000),
+                               reinterpret_cast<void*>(0x2010)).empty());
     }
     {
         const auto aline = aitd4::music_identity::container_from_path(
