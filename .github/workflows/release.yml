@@ -16,6 +16,9 @@ on:
       bump:
         description: Version bump. Auto follows the conventional commits since the last tag.
         type: choice
+        # Below 1.0.0 commit-and-tag-version maps feat to a patch and only a
+        # breaking change to a minor, so pick minor explicitly for a feature
+        # release to match the 0.4.0 and 0.5.0 history.
         options:
           - auto
           - patch
@@ -52,14 +55,14 @@ jobs:
           fi
 
       - name: Check out main with full history and tags
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: main
           fetch-depth: 0
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
 
