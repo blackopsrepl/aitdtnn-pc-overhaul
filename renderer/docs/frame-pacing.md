@@ -50,26 +50,27 @@ the module does not depend on the app-local `winmm.dll` proxy.
 The limiter does not modify the swap interval. The cap is enforced by the timer,
 not by the display refresh, because the refresh is decided by the driver and
 monitor and cannot be relied on to produce 60 Hz. VSync is therefore left as
-configured; the swap remains available to synchronize the in-viewport Bink movie
-presentation.
+configured and out of the pacing path.
 
 ## Verifying the VSync interaction
 
 The Bink Windows buffer API is DirectDraw-based and its presentation path was
 vsynced in the original engine, so keeping VSync enabled is the conservative
-choice. Whether VSync is strictly required for correct in-viewport movie
-playback has not been proven statically, so the renderer installs two
-non-invasive probes:
+choice. The renderer installs two non-invasive probes to confirm how the engine
+actually behaves, and a run on the verified PC build settled both:
 
-- `_BinkWait@4` is detoured when the executable imports it, logging the call
-  and return pattern. This shows whether the engine self-paces movie frames
-  through Bink's own clock or depends on the present rate.
-- `wglSwapIntervalEXT` is detoured if the executable looks it up through
-  `GetProcAddress`, logging any interval the game itself requests.
+- `_BinkWait@4` is imported and called. The engine polls `BinkWait` in a tight
+  loop until the next frame is due and only then decodes, so movie advancement
+  is paced by Bink's own clock rather than by the present rate. In the captured
+  run, LOGOS (601 frames), SPIRAL (206) and TRAILER (924) each closed at 30 fps
+  within a few milliseconds of the authored duration; those counts also confirm
+  the installed replacement pack, which Auto correctly read as 30 fps.
+- `wglSwapIntervalEXT` is never looked up by the executable, so the game does
+  not manage the swap interval itself.
 
-A retail run that plays an FMV and reports these log lines settles the
-question. Until then, no behavior depends on the answer, because the limiter
-never touches the swap interval.
+So VSync is not required to synchronize movie playback: the engine does that
+through `BinkWait`. VSync is left untouched because the limiter has no reason to
+modify it and the swap still presents the frames.
 
 ## Configuration
 

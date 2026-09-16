@@ -179,11 +179,11 @@ Pacing uses `QueryPerformanceCounter` with a drift-corrected deadline and no
 catch-up burst; a high-resolution waitable timer provides the bulk of the wait,
 with a short spin for sub-millisecond accuracy. The limiter does not modify the
 swap interval: its cap is enforced by the timer rather than by the display
-refresh, so the configured maximum holds regardless of the monitor, and VSync
-remains available for the swap to synchronize the in-viewport Bink movie
-presentation. Diagnostic probes record whether the executable itself sets the
-swap interval and whether it calls `BinkWait`, so the exact interaction can be
-confirmed on the retail runtime rather than assumed.
+refresh, so the configured maximum holds regardless of the monitor. VSync is
+left untouched because the engine already paces movie frames through `BinkWait`,
+which the renderer confirms with a non-invasive probe; the same probe run showed
+that the executable never sets the swap interval itself. Movie frames therefore
+do not depend on VSync for synchronization.
 
 This feature is address-agnostic: it depends only on the present and Bink hooks
 already required for presentation, so both supported executables receive it
