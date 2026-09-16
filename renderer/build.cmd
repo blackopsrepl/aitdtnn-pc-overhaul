@@ -27,13 +27,13 @@ if errorlevel 1 exit /b %errorlevel%
 
 cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /MT /DWIN32 /LD /Fe:bin\aitd4-renderer-hook.dll ^
   /Fo:build\ ^
-  src\hook_main.cpp src\runtime.cpp src\graphics_hook.cpp ^
+  src\hook_main.cpp src\runtime.cpp src\executable_hash.cpp src\graphics_hook.cpp ^
   /link /Brepro /DEF:src\hook.def /INCREMENTAL:NO opengl32.lib gdi32.lib user32.lib bcrypt.lib
 if errorlevel 1 exit /b %errorlevel%
 
 cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /MT /DWIN32 /DAITD4_TEST_HARNESS /LD ^
   /Fo:build\ /Fe:build\aitd4-renderer-hook-test.dll ^
-  src\hook_main.cpp src\runtime.cpp src\graphics_hook.cpp ^
+  src\hook_main.cpp src\runtime.cpp src\executable_hash.cpp src\graphics_hook.cpp ^
   /link /Brepro /DEF:src\hook.def /INCREMENTAL:NO opengl32.lib gdi32.lib user32.lib bcrypt.lib
 if errorlevel 1 exit /b %errorlevel%
 
