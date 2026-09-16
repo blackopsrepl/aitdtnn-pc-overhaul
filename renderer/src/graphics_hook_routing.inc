@@ -97,6 +97,12 @@ FARPROC WINAPI hooked_get_proc_address(HMODULE module, LPCSTR name) {
         real_gl_tex_sub_image_2d = reinterpret_cast<GlTexSubImage2DFn>(original);
         return reinterpret_cast<FARPROC>(hooked_gl_tex_sub_image_2d);
     }
+    if (std::strcmp(name, "wglSwapIntervalEXT") == 0) {
+        if (!original) return nullptr;
+        real_game_swap_interval = reinterpret_cast<SwapIntervalFn>(original);
+        log_line("game requested wglSwapIntervalEXT original=%p", original);
+        return reinterpret_cast<FARPROC>(hooked_game_swap_interval);
+    }
     if (std::strcmp(name, "SwapBuffers") == 0 || std::strcmp(name, "wglSwapBuffers") == 0) {
         if (!original)
             original = ::GetProcAddress(GetModuleHandleA("gdi32.dll"), "SwapBuffers");
@@ -172,6 +178,7 @@ bool install_graphics_hooks() {
     // dynamic hook above is therefore the authoritative path; requiring an
     // OPENGL32 IAT patch here would reject the real game while only succeeding
     // in synthetic programs that link OpenGL at build time.
+    initialize_frame_limiter();
     hooks_initialized = ok;
     log_line("graphics hooks target monitor=%ld,%ld..%ld,%ld viewport=%d,%d %dx%d logical=%dx%d",
              monitor_rect.left, monitor_rect.top, monitor_rect.right, monitor_rect.bottom,
@@ -216,6 +223,13 @@ bool get_renderer_diagnostics(RendererDiagnostics* diagnostics) {
     result.bink_native_blits_suppressed = bink_native_blits_suppressed;
     result.bink_last_surface_format = last_bink_copy_flags & bink_surface_mask;
     result.bink_last_pitch = last_bink_pitch;
+    result.frame_limit_enabled = g_config.frame_limit_enabled ? 1 : 0;
+    result.frame_limit_game = g_config.frame_limit_game;
+    result.frame_limit_movie = g_config.frame_limit_movie;
+    result.movie_active = active_bink_movie ? 1 : 0;
+    result.frame_limited_presents = frame_limited_presents;
+    result.display_refresh_hz = static_cast<DWORD>(display_refresh_hz);
+    result.last_movie_interval_us = static_cast<LONG>(last_movie_interval_us);
     *diagnostics = result;
     return true;
 }

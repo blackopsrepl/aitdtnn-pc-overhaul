@@ -106,6 +106,17 @@ void WINAPI hooked_bink_buffer_blit(void* buffer, void* rectangles,
              buffer, rectangles, rectangle_count);
 }
 
+std::uint32_t WINAPI hooked_bink_wait(void* bink) {
+    const std::uint32_t result = real_bink_wait ? real_bink_wait(bink) : 0;
+    if (bink == active_bink_movie) {
+        ++active_bink_wait_calls;
+        if (active_bink_wait_calls <= 8 || active_bink_wait_calls % 120 == 0)
+            log_line("BinkWait movie=%p count=%u result=%u", bink, active_bink_wait_calls,
+                     result);
+    }
+    return result;
+}
+
 void WINAPI hooked_bink_next_frame(void* bink) {
     real_bink_next_frame(bink);
     if (bink == active_bink_movie) {
@@ -190,6 +201,10 @@ bool install_bink_hooks() {
                     reinterpret_cast<void*>(hooked_bink_buffer_set_offset),
                     reinterpret_cast<void**>(&real_bink_buffer_set_offset));
     ok &= install_native_movie_frame_hook();
+    if (!patch_iat("binkw32.dll", "_BinkWait@4",
+                   reinterpret_cast<void*>(hooked_bink_wait),
+                   reinterpret_cast<void**>(&real_bink_wait)))
+        log_line("BinkWait probe unavailable; the game does not import BinkWait");
     bink_hooks_ready = ok;
     log_line("Bink proportional movie hooks %s", ok ? "ready" : "failed");
     return ok;

@@ -10,6 +10,7 @@
 #include "bink_frame.hpp"
 #include "character_select_movie_gate.hpp"
 #include "cutscene_input_guard.hpp"
+#include "frame_limiter.hpp"
 #include "graphics_hook.hpp"
 #include "movie_skip_gate.hpp"
 #include "runtime.hpp"
@@ -136,6 +137,7 @@ using BinkBufferUnlockFn = void(WINAPI*)(void*);
 using BinkNextFrameFn = void(WINAPI*)(void*);
 using BinkCloseFn = void(WINAPI*)(void*);
 using BinkGetRectsFn = std::uint32_t(WINAPI*)(void*, std::uint32_t);
+using BinkWaitFn = std::uint32_t(WINAPI*)(void*);
 using NativeMovieFrameFn = void(__cdecl*)(void*, void*);
 using CharacterSelectAdvanceFn = void(__cdecl*)();
 using PostSelectionPlatformFn = int(__cdecl*)();
@@ -210,6 +212,8 @@ BinkBufferUnlockFn real_bink_buffer_unlock{};
 BinkNextFrameFn real_bink_next_frame{};
 BinkCloseFn real_bink_close{};
 BinkGetRectsFn real_bink_get_rects{};
+BinkWaitFn real_bink_wait{};
+SwapIntervalFn real_game_swap_interval{};
 NativeMovieFrameFn real_native_movie_frame{};
 CharacterSelectAdvanceFn real_character_select_advance{};
 PostSelectionPlatformFn real_post_selection_platform{};

@@ -86,6 +86,8 @@ std::uint32_t active_bink_copies{};
 std::uint32_t active_bink_next_frames{};
 std::uint32_t active_bink_presented_frames{};
 std::uint32_t active_bink_suppressed_blits{};
+std::uint32_t active_bink_wait_calls{};
+int game_requested_swap_interval{-2};
 bool artificial_bink_lock{};
 bool alternate_bink_frame_pending{};
 int active_bink_request_id{-1};

@@ -136,6 +136,7 @@ void* WINAPI hooked_bink_open(const char* filename, std::uint32_t flags) {
         active_bink_next_frames = 0;
         active_bink_presented_frames = 0;
         active_bink_suppressed_blits = 0;
+        active_bink_wait_calls = 0;
         active_bink_buffer = nullptr;
         artificial_bink_lock = false;
         alternate_bink_frame_pending = false;

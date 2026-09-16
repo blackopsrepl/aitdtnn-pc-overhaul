@@ -113,6 +113,7 @@ BOOL WINAPI hooked_swap_buffers(HDC dc) {
     glPopMatrix();
     glPopClientAttrib();
     glPopAttrib();
+    pace_present();
     const BOOL result = real_swap_buffers(dc);
     if (alternate_bink_frame_pending) {
         if (!result)

@@ -5,6 +5,7 @@
 
 #include "graphics_hook_platform.inc"
 #include "graphics_hook_state.inc"
+#include "graphics_hook_frame_limiter.inc"
 #include "graphics_hook_window.inc"
 #include "graphics_hook_movie_requests.inc"
 #include "graphics_hook_movie_decode.inc"

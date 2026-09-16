@@ -3,6 +3,7 @@
 // earlier fragments are intentionally visible here because all fragments form one unit.
 
 std::uint32_t WINAPI hooked_bink_do_frame(void* bink) {
+    pace_movie_frame(bink);
     const std::uint32_t result = real_bink_do_frame(bink);
     if (bink == active_bink_movie) {
         ++active_bink_do_frames;
