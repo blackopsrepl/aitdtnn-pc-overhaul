@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.6.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.5.1...v0.6.0) (2026-09-16)
+
+### Features
+
+* **renderer:** add frame rate limit configuration and pacing policy ([972dafb](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/972dafbd06371539d6b9a59537734c93df83de0d))
+* **renderer:** pace presented gameplay and cinematic frames ([a3bbec0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/a3bbec09df7ac1f0f2deab553bc2b5a2f8dd45d2))
+
 ## [0.5.1](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.5.0...v0.5.1) (2026-08-22)
 
 ### Changed
