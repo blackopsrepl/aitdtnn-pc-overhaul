@@ -1,0 +1,98 @@
+name: Cut release
+
+# Bumps VERSION and CHANGELOG.md with commit-and-tag-version, commits the release,
+# tags it, and pushes both to main. The tag is what makes the installer workflow
+# publish a GitHub release, so this is the only manual step in a release.
+#
+# Pushing with the default GITHUB_TOKEN does not start other workflows, so when no
+# personal access token is configured this workflow dispatches the installer
+# workflow explicitly after tagging. Add a repository secret named RELEASE_TOKEN
+# (a token with contents and actions write access) if you would rather let the tag
+# push trigger the installer workflow on its own.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump. Auto follows the conventional commits since the last tag.
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+      dry_run:
+        description: Show what would happen without committing, tagging or pushing.
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Bump version and tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Choose a push token
+        id: token
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -n "$RELEASE_TOKEN" ]; then
+            echo "pat=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pat=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out main with full history and tags
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Configure the release identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump VERSION and CHANGELOG
+        env:
+          BUMP: ${{ inputs.bump }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$BUMP" != "auto" ]; then
+            args+=(--release-as "$BUMP")
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          npx --yes commit-and-tag-version@13.2.1 "${args[@]}"
+
+      - name: Push the release commit and tag
+        if: ${{ !inputs.dry_run }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          git push origin HEAD:main
+          git push origin "v$version"
+
+      - name: Dispatch the installer build for the new tag
+        if: ${{ !inputs.dry_run && steps.token.outputs.pat == 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          gh workflow run build-installer.yml --repo "$GITHUB_REPOSITORY" --ref "v$version"
