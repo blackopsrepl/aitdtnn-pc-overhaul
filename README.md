@@ -86,6 +86,29 @@ Disable it by changing `renderer\aitd4-overhaul.ini`:
 Enabled=0
 ```
 
+### Safe frame pacing on modern displays
+
+The PC engine ties gameplay speed and several assumptions to the presented frame
+rate, so displays faster than the hardware it targeted can run the game too fast
+and trigger errors. The renderer caps gameplay at 60 FPS and paces cinematics to
+the authored rate of the Bink file being played. Both are enabled by default and
+can be changed in `renderer\aitd4-overhaul.ini`:
+
+```ini
+[FrameRate]
+Enabled=1
+GameLimit=60
+MovieLimit=Auto
+```
+
+`GameLimit` and `MovieLimit` accept a frame rate or `0` for uncapped.
+`MovieLimit=Auto` follows the movie's own authored rate, so retail movies and
+community replacement packs each play at their correct speed. The cap is
+enforced by an explicit timer rather than by the display refresh, so it holds
+even when the driver or monitor would otherwise run faster. VSync itself is left
+as configured, because the swap is what synchronizes the in-viewport cinematic
+presentation.
+
 ### Restored character-selection movies
 
 The renderer restores the verified post-interstitial character-selection movie
@@ -240,7 +263,9 @@ and presentation acceptance work is documented in [`REPORT.md`](REPORT.md).
 
 The renderer's investigation and movie inventory are available in
 [`renderer/docs/fmv-audit.md`](renderer/docs/fmv-audit.md), with presentation
-design notes in [`renderer/docs/crt-design.md`](renderer/docs/crt-design.md).
+design notes in [`renderer/docs/crt-design.md`](renderer/docs/crt-design.md) and
+frame-pacing notes in
+[`renderer/docs/frame-pacing.md`](renderer/docs/frame-pacing.md).
 The technical report is now split into focused subsystem reports, all linked
 from [`REPORT.md`](REPORT.md).
 

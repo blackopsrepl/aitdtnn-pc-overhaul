@@ -26,6 +26,12 @@ Implemented production path:
 - RGBA8 off-screen rendering with 24-bit depth, 8-bit stencil and configurable
   4x MSAA resolve.
 - VSync enabled by default.
+- Frame pacing enabled by default: gameplay is capped at 60 FPS and cinematics
+  are paced to the authored rate of the playing Bink file. The cap is enforced
+  by an explicit timer, so it holds on any display refresh; VSync is left
+  untouched because the swap synchronizes the in-viewport cinematic. Configure
+  it in `renderer\aitd4-overhaul.ini` under `[FrameRate]`; `GameLimit`/`MovieLimit`
+  accept a frame rate, `0` for uncapped, or `Auto` for the movie's authored rate.
 - Up to 16x anisotropic filtering for mipmapped textures while non-mipmapped
   backgrounds, masks, UI and video retain their original filtering.
 - Legacy `GL_CLAMP` conversion to `GL_CLAMP_TO_EDGE` to avoid border-color edge

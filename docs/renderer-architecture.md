@@ -156,3 +156,37 @@ and the shader covers only the exact 4:3 viewport, so pillars remain black.
 Gameplay and both Bink backends are routed through the same signal reconstruction
 when CRT is active. Setting `[CRT] Enabled=0` disables CRT-specific redirection;
 proportional scaling, the input guard and lifecycle logging remain active.
+
+## 8. Frame pacing
+
+The original PC engine advances gameplay logic from presented frame count, so on
+machines faster than the hardware it targeted, gameplay speed and reference
+frame-rate assumptions both scale with the display refresh. PCGamingWiki records
+the resulting errors above 60 FPS, and the game's FMV player assumes the retail
+movies' low authored rate.
+
+The renderer paces the present boundary rather than the game's logic or an OS
+timing API. `hooked_swap_buffers` and the alternate Bink backend's
+`present_decoded_bink_frame` each call one `pace_present` helper immediately
+before the real `SwapBuffers`. Gameplay uses `[FrameRate] GameLimit` (60 FPS by
+default). While a movie is playing, the target is the rate read from the live
+Bink handle, so retail encodes and community replacement packs are paced to
+their own authored rate instead of one hard-coded number. Pacing is applied once
+per frame: the game-facing swap hook defers to the alternate backend while that
+backend owns the present.
+
+Pacing uses `QueryPerformanceCounter` with a drift-corrected deadline and no
+catch-up burst; a high-resolution waitable timer provides the bulk of the wait,
+with a short spin for sub-millisecond accuracy. The limiter does not modify the
+swap interval: its cap is enforced by the timer rather than by the display
+refresh, so the configured maximum holds regardless of the monitor, and VSync
+remains available for the swap to synchronize the in-viewport Bink movie
+presentation. Diagnostic probes record whether the executable itself sets the
+swap interval and whether it calls `BinkWait`, so the exact interaction can be
+confirmed on the retail runtime rather than assumed.
+
+This feature is address-agnostic: it depends only on the present and Bink hooks
+already required for presentation, so both supported executables receive it
+without additional executable signatures. The authored movie rate is read
+defensively across the two known Bink 1.x field layouts; an unrecognised handle
+falls back to the documented retail rate and logs the observed interval.

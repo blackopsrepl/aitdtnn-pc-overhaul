@@ -86,13 +86,15 @@ lands in an off-screen 4:3 framebuffer. The final pass resolves MSAA, applies
 the optional neutral CRT pipeline, and presents a centered proportional image.
 
 The `graphics_hook.cpp` include map is the table of contents. Window/input and
-movie fragments deal with engine-facing behavior. Context, CRT, framebuffer,
-legacy-GL and presentation fragments deal with graphics behavior. The routing
-fragment connects the original imported APIs to the replacements.
+movie fragments deal with engine-facing behavior. The frame-limiter fragment
+paces the present boundary and chooses the cinematic rate; context, CRT,
+framebuffer, legacy-GL and presentation fragments deal with graphics behavior.
+The routing fragment connects the original imported APIs to the replacements.
 
-`runtime.cpp` loads configuration and exposes diagnostic state. Small headers
-such as `viewport.hpp`, `movie_skip_gate.hpp` and `bink_frame.hpp` isolate pure
-rules that can be tested without launching the game.
+`runtime.cpp` loads configuration and exposes diagnostic state, and
+`executable_hash.cpp` owns executable hashing. Small headers such as
+`viewport.hpp`, `movie_skip_gate.hpp`, `bink_frame.hpp` and `frame_limiter.hpp`
+isolate pure rules that can be tested without launching the game.
 
 ## Rumble
 
