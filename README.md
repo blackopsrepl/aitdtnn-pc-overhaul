@@ -88,11 +88,11 @@ Enabled=0
 
 ### Safe frame pacing on modern displays
 
-The PC engine ties gameplay speed and several assumptions to the presented frame
-rate, so displays faster than the hardware it targeted can run the game too fast
-and trigger errors. The renderer caps gameplay at 60 FPS and paces cinematics to
-the authored rate of the Bink file being played. Both are enabled by default and
-can be changed in `renderer\aitd4-overhaul.ini`:
+The engine ties gameplay speed to the presented frame rate, so faster displays
+run it too fast and can trigger errors, while the FMV player assumes the retail
+movies' low rate. The renderer caps gameplay at 60 FPS and paces cinematics to
+the playing Bink file's authored rate; both are on by default in
+`renderer\aitd4-overhaul.ini`:
 
 ```ini
 [FrameRate]
@@ -101,13 +101,10 @@ GameLimit=60
 MovieLimit=Auto
 ```
 
-`GameLimit` and `MovieLimit` accept a frame rate or `0` for uncapped.
-`MovieLimit=Auto` follows the movie's own authored rate, so retail movies and
-community replacement packs each play at their correct speed. The cap is
-enforced by an explicit timer rather than by the display refresh, so it holds
-even when the driver or monitor would otherwise run faster. VSync itself is left
-as configured, because the swap is what synchronizes the in-viewport cinematic
-presentation.
+`GameLimit`/`MovieLimit` take a frame rate or `0` for uncapped; `Auto` follows
+the movie's own rate, so retail movies and replacement packs each play at the
+right speed. The cap comes from a timer rather than the display refresh, and
+VSync is left as configured for the in-viewport cinematic presentation.
 
 ### Restored character-selection movies
 
