@@ -25,6 +25,11 @@ cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /I src ^
   tests\crt_pipeline_test.cpp /link /Brepro
 if errorlevel 1 exit /b %errorlevel%
 
+cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /I src ^
+  /Fo:build\frame_limiter_test.obj /Fe:build\frame-limiter-test.exe ^
+  tests\frame_limiter_test.cpp /link /Brepro
+if errorlevel 1 exit /b %errorlevel%
+
 cl /nologo /Brepro /std:c++20 /O2 /W4 /WX /EHsc /MT /DWIN32 /LD /Fe:bin\aitd4-renderer-hook.dll ^
   /Fo:build\ ^
   src\hook_main.cpp src\runtime.cpp src\executable_hash.cpp src\graphics_hook.cpp ^
@@ -60,6 +65,8 @@ if errorlevel 1 exit /b %errorlevel%
 build\movie-skip-gate-test.exe
 if errorlevel 1 exit /b %errorlevel%
 build\crt-pipeline-test.exe
+if errorlevel 1 exit /b %errorlevel%
+build\frame-limiter-test.exe
 if errorlevel 1 exit /b %errorlevel%
 build\aitd4-gl-harness.exe
 if errorlevel 1 exit /b %errorlevel%

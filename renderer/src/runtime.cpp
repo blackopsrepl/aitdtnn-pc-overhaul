@@ -49,6 +49,23 @@ float ini_float(const char* path, const char* section, const char* key, float fa
     return std::clamp(parsed, minimum, maximum);
 }
 
+void load_movie_limit() {
+    char value[32]{};
+    GetPrivateProfileStringA("FrameRate", "MovieLimit", "Auto", value, sizeof(value), g_ini_path);
+    if (_stricmp(value, "Auto") == 0) {
+        g_config.frame_limit_movie = -1;
+        return;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || parsed < 0) {
+        log_line("invalid FrameRate MovieLimit=%s; using Auto", value);
+        g_config.frame_limit_movie = -1;
+        return;
+    }
+    g_config.frame_limit_movie = static_cast<int>(std::clamp<long>(parsed, 0, 1000));
+}
+
 void load_config_values() {
     g_config.logical_width = std::clamp(
         static_cast<int>(GetPrivateProfileIntA("Display", "LogicalWidth", 0, g_ini_path)),
@@ -69,6 +86,11 @@ void load_config_values() {
         ini_bool(g_ini_path, "Development", "HotReload", false);
     g_config.development_capture =
         ini_bool(g_ini_path, "Development", "Capture", false);
+    g_config.frame_limit_enabled = ini_bool(g_ini_path, "FrameRate", "Enabled", true);
+    g_config.frame_limit_game = std::clamp(
+        static_cast<int>(GetPrivateProfileIntA("FrameRate", "GameLimit", 60, g_ini_path)),
+        0, 1000);
+    load_movie_limit();
     g_config.crt_enabled = ini_bool(g_ini_path, "CRT", "Enabled", true);
     g_config.crt_signal_width = std::clamp(
         static_cast<int>(GetPrivateProfileIntA("CRT", "SignalWidth", 640, g_ini_path)),
@@ -92,6 +114,10 @@ void load_config_values() {
         g_config.logical_height = std::clamp(std::atoi(test_value), 0, 16384);
     if (GetEnvironmentVariableA("AITD4_TEST_CRT_ENABLED", test_value, sizeof(test_value)))
         g_config.crt_enabled = std::atoi(test_value) != 0;
+    if (GetEnvironmentVariableA("AITD4_TEST_FRAME_LIMIT", test_value, sizeof(test_value))) {
+        g_config.frame_limit_enabled = true;
+        g_config.frame_limit_game = std::clamp(std::atoi(test_value), 0, 1000);
+    }
 #endif
 }
 
@@ -203,6 +229,9 @@ bool reload_runtime_config() {
              g_config.crt_enabled ? 1 : 0, g_config.crt_mask_strength,
              g_config.crt_scanline_strength, g_config.crt_bloom_strength,
              g_config.crt_halation_strength);
+    log_line("frame rate configuration reloaded enabled=%d game=%d movie=%d",
+             g_config.frame_limit_enabled ? 1 : 0, g_config.frame_limit_game,
+             g_config.frame_limit_movie);
     return true;
 }
 

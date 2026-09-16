@@ -24,6 +24,9 @@ struct OverhaulConfig {
     bool fix_mask_seams{true};
     bool development_hot_reload{false};
     bool development_capture{false};
+    bool frame_limit_enabled{true};
+    int frame_limit_game{60};
+    int frame_limit_movie{-1};  // -1 selects the playing movie's authored rate
     bool crt_enabled{true};
     int crt_signal_width{640};
     int crt_signal_height{480};
