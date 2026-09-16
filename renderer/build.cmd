@@ -102,4 +102,10 @@ set AITD4_TEST_BINK_SCALE_REJECT=
 set AITD4_TEST_CRT_ENABLED=
 if not "%reject_result%"=="91" exit /b 92
 echo rejecting Bink scale failed closed as expected
+set AITD4_TEST_FRAME_LIMIT=30
+build\aitd4-gl-harness.exe
+set pacing_result=%errorlevel%
+set AITD4_TEST_FRAME_LIMIT=
+if not "%pacing_result%"=="0" exit /b %pacing_result%
+echo frame pacing harness passed
 exit /b 0

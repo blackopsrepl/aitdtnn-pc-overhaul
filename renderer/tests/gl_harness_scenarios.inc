@@ -2,6 +2,44 @@
 // Read this fragment in the order listed by the parent .cpp file. Names declared in
 // earlier fragments are intentionally visible here because all fragments form one unit.
 
+    char frame_limit_text[16]{};
+    if (GetEnvironmentVariableA("AITD4_TEST_FRAME_LIMIT", frame_limit_text,
+                                sizeof(frame_limit_text))) {
+        const int target_fps = std::atoi(frame_limit_text);
+        if (target_fps <= 0) return 40;
+        constexpr int paced_frames = 4;
+        LARGE_INTEGER frequency{};
+        LARGE_INTEGER start{};
+        LARGE_INTEGER end{};
+        QueryPerformanceFrequency(&frequency);
+        QueryPerformanceCounter(&start);
+        for (int frame = 0; frame < paced_frames; ++frame) {
+            viewport(0, 0, static_cast<GLsizei>(status.render_width),
+                     static_cast<GLsizei>(status.render_height));
+            glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+            clear(GL_COLOR_BUFFER_BIT);
+            if (!swap_buffers(dc)) return 41;
+        }
+        QueryPerformanceCounter(&end);
+        const double seconds = static_cast<double>(end.QuadPart - start.QuadPart) /
+                               static_cast<double>(frequency.QuadPart);
+        const double minimum = (paced_frames - 1) / static_cast<double>(target_fps) * 0.85;
+        if (seconds < minimum) {
+            std::fprintf(stderr, "frame pacing too fast limit=%d seconds=%.4f minimum=%.4f\n",
+                         target_fps, seconds, minimum);
+            return 42;
+        }
+        aitd4::RendererDiagnostics paced_status{};
+        if (!diagnostics(&paced_status) || paced_status.frame_limit_enabled != 1 ||
+            paced_status.frame_limit_game != target_fps ||
+            paced_status.frame_limited_presents == 0) return 43;
+        std::printf("frame pacing harness passed limit=%d seconds=%.4f\n", target_fps, seconds);
+        make_current(nullptr, nullptr);
+        delete_context(context);
+        ReleaseDC(window, dc);
+        DestroyWindow(window);
+        return 0;
+    }
     if (full_scissor[0] != 0 || full_scissor[1] != 0 ||
         full_scissor[2] != static_cast<GLint>(status.render_width) ||
         full_scissor[3] != static_cast<GLint>(status.render_height)) return 25;

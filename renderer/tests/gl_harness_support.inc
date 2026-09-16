@@ -7,6 +7,7 @@
 #include <gl/GL.h>
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <string>

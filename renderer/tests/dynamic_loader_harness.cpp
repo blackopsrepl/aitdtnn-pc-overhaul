@@ -272,6 +272,8 @@ int WINAPI WinMain(HINSTANCE instance, HINSTANCE, LPSTR, int) {
         status.bink_native_blits_suppressed != (crt_enabled && !alternate_gl_bink ? 1u : 0u) ||
         status.bink_last_surface_format != (crt_enabled ? 2u : 0u) ||
         status.bink_last_pitch != (crt_enabled ? 640 * 3 : 0) ||
+        status.frame_limit_enabled != 1 || status.frame_limit_game != 60 ||
+        status.frame_limit_movie != -1 ||
         status.gl_major < 3 || (status.gl_major == 3 && status.gl_minor < 3) ||
         status.render_width * 3 != status.render_height * 4) return 11;
     std::printf("dynamic loader harness passed gl=%lu.%lu logical=%lux%lu output=%lux%lu\n",

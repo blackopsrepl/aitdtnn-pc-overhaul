@@ -30,7 +30,10 @@ struct StubMovie {
     std::uint32_t height{};
     std::uint32_t frames{};
     std::uint32_t frame{};
-    std::uint8_t reserved[0x24]{};
+    std::uint32_t last_frame{};
+    std::uint32_t frame_rate{15};
+    std::uint32_t frame_rate_div{1};
+    std::uint8_t reserved[0x1C]{};
 };
 struct StubBuffer {
     std::uint32_t width{};
@@ -43,6 +46,8 @@ struct StubBuffer {
 };
 static_assert(offsetof(StubMovie, frames) == 0x08);
 static_assert(offsetof(StubMovie, frame) == 0x0C);
+static_assert(offsetof(StubMovie, frame_rate) == 0x14);
+static_assert(offsetof(StubMovie, frame_rate_div) == 0x18);
 static_assert(offsetof(StubBuffer, surface) == 0x10);
 static_assert(offsetof(StubBuffer, pixels) == 0x14);
 static_assert(offsetof(StubBuffer, pitch) == 0x18);
