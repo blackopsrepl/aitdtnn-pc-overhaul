@@ -4,7 +4,7 @@
   "files": [
     {
       "path": "game/version.dll",
-      "sha256": "97F6F8E25C79B4F2B761EB9197CEC0F1F582410C28EC90068F67E12F0AF17B5F"
+      "sha256": "447C2267FA2CA44FAB4760D91803F80540D49510A5CD0A47ADA22EAE6C33A7C8"
     },
     {
       "path": "game/audio-restoration/aitd4-audio-hook.dll",
@@ -12,11 +12,11 @@
     },
     {
       "path": "game/renderer/aitd4-renderer-hook.dll",
-      "sha256": "4EB946191317BC49319AF0AB3ACC850A1CCE56FBD6512478C19112818168FC58"
+      "sha256": "D61C3594DA9622E25F01A4ED6C030C2D64FEF128E193D7CF711EC490B60AB01B"
     },
     {
       "path": "game/rumble/aitd4-rumble-hook.dll",
-      "sha256": "5BB4D781052898ABD8EE11B6259A4C85ED348AED302D5FB12A843471AC14C2EC"
+      "sha256": "078AACFB666383EB1AF93AEDB4146B9F340803BB8CA60111BC6BEE6CA89ED2C0"
     },
     {
       "path": "game/dinput8.dll",
