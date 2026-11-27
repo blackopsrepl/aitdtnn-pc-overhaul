@@ -294,6 +294,3 @@ See [`LICENSE.txt`](LICENSE.txt), [`NOTICE.md`](NOTICE.md), and the component
 license files for licensing and third-party notices. The audio restoration
 includes the GPLv3-only Highly Theoretical AICA emulation core; Xidi is included
 under its own license.
-
-Steam version support was sponsored by [@NomadBal](https://github.com/NomadBal).
-Many thanks for making it happen!
