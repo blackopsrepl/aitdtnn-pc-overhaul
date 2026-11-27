@@ -29,6 +29,11 @@ UninstallDisplayName=AITD:TNN PC Overhaul {#MyAppVersion}
 UninstallDisplayIcon={code:GetGameExe}
 LicenseFile=..\LICENSE.txt
 
+[Dirs]
+; The game saves to Save\ beside alone4.exe but does not always create it;
+; Steam installs ship without it. Created when missing, never removed.
+Name: "{code:GetGameDir}\Save"; Flags: uninsneveruninstall
+
 [Files]
 Source: "..\payload\game\version.dll"; DestDir: "{code:GetGameDir}"; Flags: ignoreversion uninsneveruninstall
 Source: "..\payload\game\audio-restoration\aitd4-audio-hook.dll"; DestDir: "{code:GetGameDir}\audio-restoration"; Flags: ignoreversion uninsneveruninstall
@@ -70,6 +75,8 @@ Source: "..\third_party\Xidi-v5.0.0\README.md"; DestDir: "{app}\licenses"; DestN
 const
   Supported15SlotExeHash = '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672';
   SupportedRetailExeHash = '320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0';
+  SupportedSteamExeHash = '228123A2E5620AD1976F83B867513B761CA824610E0BF73678C5BECEBA6BD815';
+  SteamUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\Steam App 259190';
 
 var
   GamePage: TInputDirWizardPage;

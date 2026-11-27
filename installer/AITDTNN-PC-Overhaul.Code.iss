@@ -1,15 +1,35 @@
 { Wizard and install-transaction implementation. }
 { AITDTNN-PC-Overhaul.iss contains the declarative package surface. }
 
+function GameExeExistsIn(Directory: String): Boolean;
+begin
+  Result := (Directory <> '') and FileExists(AddBackslash(Directory) + 'alone4.exe');
+end;
+
+{ Steam registers every installed app under its own uninstall key, so app
+  259190 resolves to whichever Steam library folder holds the game. }
+function DetectSteamGameDirectory: String;
+begin
+  Result := '';
+  if IsWin64 then
+    RegQueryStringValue(HKLM64, SteamUninstallKey, 'InstallLocation', Result);
+  if not GameExeExistsIn(Result) then
+    RegQueryStringValue(HKLM32, SteamUninstallKey, 'InstallLocation', Result);
+  if not GameExeExistsIn(Result) then
+    Result := '';
+end;
+
 function DetectGameDirectory: String;
 begin
   Result := '';
   RegQueryStringValue(HKCU, 'Software\Infogrames\Alone in the Dark\1.0',
     'Alone_Install', Result);
-  if Result = '' then
+  if not GameExeExistsIn(Result) then
     RegQueryStringValue(HKLM32, 'Software\Infogrames\Alone in the Dark\1.0',
       'Alone_Install', Result);
-  if (Result = '') or not FileExists(AddBackslash(Result) + 'alone4.exe') then
+  if not GameExeExistsIn(Result) then
+    Result := DetectSteamGameDirectory;
+  if not GameExeExistsIn(Result) then
     Result := ExpandConstant('{pf32}\Infogrames\Alone in the Dark - The New Nightmare');
 end;
 
@@ -77,10 +97,16 @@ begin
 end;
 
 function ExactExecutableSupported: Boolean;
+var
+  Actual: String;
 begin
-  Result := FileExists(GetGameExe('')) and
-    ((CompareText(GetSHA256OfFile(GetGameExe('')), Supported15SlotExeHash) = 0) or
-     (CompareText(GetSHA256OfFile(GetGameExe('')), SupportedRetailExeHash) = 0));
+  Result := FileExists(GetGameExe(''));
+  if not Result then
+    exit;
+  Actual := GetSHA256OfFile(GetGameExe(''));
+  Result := (CompareText(Actual, Supported15SlotExeHash) = 0) or
+    (CompareText(Actual, SupportedRetailExeHash) = 0) or
+    (CompareText(Actual, SupportedSteamExeHash) = 0);
 end;
 
 procedure InitializeWizard;
@@ -91,7 +117,7 @@ begin
   GamePage := CreateInputDirPage(wpSelectDir,
     'Select the installed PC game',
     'Where is Alone in the Dark: The New Nightmare installed?',
-    'Select the folder containing the supported alone4.exe, then click Next.', False, '');
+    'Select the folder containing the supported alone4.exe (original PC or Steam release), then click Next.', False, '');
   GamePage.Add('PC game folder:');
   CommandLineGamePath := ExpandConstant('{param:GAMEPATH|}');
   if CommandLineGamePath <> '' then
@@ -125,7 +151,7 @@ begin
     end
     else if not ExactExecutableSupported then
     begin
-      MsgBox('This combined overhaul supports only the verified English 15-slot/no-CD or retail CD alone4.exe.',
+      MsgBox('This combined overhaul supports only the verified English 15-slot/no-CD, retail CD or Steam alone4.exe.',
         mbError, MB_OK);
       Result := False;
     end;
