@@ -7,7 +7,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$expectedHash = '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672'
+$expectedHashes = @(
+    '5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672', # English 15-slot/no-CD
+    '320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0', # English retail CD
+    '228123A2E5620AD1976F83B867513B761CA824610E0BF73678C5BECEBA6BD815'  # English Steam
+)
 $expectedPrologue = [byte[]](0x55, 0x8B, 0xEC, 0x6A, 0xFF)
 $expectedExports = @(
     'GetFileVersionInfoA',
@@ -143,7 +147,7 @@ if ($GameExe) {
         throw "Game executable not found: $GameExe"
     }
     $actualHash = (Get-FileHash -LiteralPath $GameExe -Algorithm SHA256).Hash
-    if ($actualHash -ne $expectedHash) {
+    if ($actualHash -notin $expectedHashes) {
         throw "Unsupported game SHA-256: $actualHash"
     }
     $actualPrologue = Read-EntrypointBytes $GameExe $expectedPrologue.Count

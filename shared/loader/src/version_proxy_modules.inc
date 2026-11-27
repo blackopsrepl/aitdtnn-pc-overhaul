@@ -45,19 +45,30 @@ extern "C" void RunEntrypointGate() noexcept {
     if (!hash_file(exe_path, actual_digest, &hash_error)) {
         fail_closed("Could not hash the running alone4.exe.", hash_error);
     }
-    if (std::memcmp(actual_digest, kSupported15SlotExeSha256, sizeof(actual_digest)) != 0 &&
-        std::memcmp(actual_digest, kSupportedRetailExeSha256, sizeof(actual_digest)) != 0) {
+    const char* profile = nullptr;
+    if (std::memcmp(actual_digest, kSupported15SlotExeSha256, sizeof(actual_digest)) == 0) {
+        profile = "english-15-slot-no-cd";
+    } else if (std::memcmp(actual_digest, kSupportedRetailExeSha256, sizeof(actual_digest)) == 0) {
+        profile = "english-retail-cd";
+    } else if (std::memcmp(actual_digest, kSupportedSteamExeSha256, sizeof(actual_digest)) == 0) {
+        profile = "english-steam";
+    }
+    if (profile == nullptr) {
         char actual_hex[65]{};
-        char message[256]{};
+        char message[384]{};
         digest_to_hex(actual_digest, actual_hex);
         sprintf_s(
             message,
             "Unsupported alone4.exe SHA-256: %s. Expected "
-            "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672 or "
-            "320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0.",
+            "5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672, "
+            "320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0 or "
+            "228123a2e5620ad1976f83b867513b761ca824610e0bf73678c5beceba6bd815.",
             actual_hex);
         fail_closed(message);
     }
+    char profile_message[128]{};
+    sprintf_s(profile_message, "Executable profile verified: %s.", profile);
+    append_log(profile_message);
 
     load_and_initialize_module(kAudioRelativePath, "AITD4_AudioInitialize",
                                &g_audio_module);
