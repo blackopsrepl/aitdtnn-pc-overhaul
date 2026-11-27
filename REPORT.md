@@ -27,16 +27,29 @@ verified result from a plausible but unverified one.
 
 ## 2. Supported baseline
 
-The current release profile intentionally supports one executable:
+The current release supports exactly three English `alone4.exe` builds:
 
-| Item | Supported value |
+| Profile | SHA-256 | Hook layout |
+|---|---|---|
+| Original 15-slot/no-CD | `5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672` | 15-slot |
+| Original retail CD | `320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0` | retail CD |
+| Steam (app 259190) | `228123A2E5620AD1976F83B867513B761CA824610E0BF73678C5BECEBA6BD815` | retail CD |
+
+The Steam executable is the retail CD image with 32 bytes changed: the `je` after
+the CD-file `CreateFileA` at RVA `0x8D722` becomes `nop nop`, the `jne` on the
+cached CD drive letter at `0x8DB28` becomes `jmp`, and the "Please insert CD 3"
+string at `0xC708C` becomes "Loading, please wait...". None of those bytes lie
+in a hooked or verified interval, so Steam reuses every retail CD address.
+`tools/Verify-ExecutableProfiles.ps1 -SteamExe` re-proves this byte-for-byte.
+Steam launches `alone4.exe` directly, so the loader gate sees the real process.
+
+| Item | Value |
 |---|---|
-| PC executable | English 15-slot/no-CD `alone4.exe` |
-| SHA-256 | `5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672` |
 | On-disk executable modification | None |
 | Runtime architecture | 32-bit x86 |
 | Reference display used for acceptance | 1920x1080, centered 1440x1080 4:3 viewport |
 | Tested local Bink build | Bink 1.5s, SHA-256 `E3D19E66B6135925116C8E7585B6E6E3746E50D79F1EC863CDA615B0189DF1A9` |
+| Tested Steam Bink build | RAD 1998-1999 `binkw32.dll`, SHA-256 `7EF2F1D2B6D833BCC3BEA2359975E747B84E166BEBFDF92E6A2A7389B8F2C0E6`; exports every hooked and imported name |
 
 Address-sensitive modules hash the executable and validate the expected bytes at
 every patch site. An unknown executable or a partially compatible build is

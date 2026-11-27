@@ -21,6 +21,9 @@ Supported executable SHA-256:
 
 `320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0` (retail CD)
 
+`228123a2e5620ad1976f83b867513b761ca824610e0bf73678c5beceba6bd815` (Steam; retail CD
+image with the CD check patched, so it uses the retail CD addresses)
+
 Public initializer:
 
 ```cpp

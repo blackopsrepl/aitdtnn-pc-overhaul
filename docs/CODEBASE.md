@@ -108,6 +108,19 @@ the verified addresses and rolls back partial installation on failure.
 unit test is the safest place to begin if you want to understand the command
 format.
 
+## Executable profiles
+
+Three exact `alone4.exe` builds are supported: original 15-slot/no-CD, original
+retail CD, and Steam. Steam is the retail CD image with only its CD check
+patched, so it shares the retail CD addresses. Each layer names the build it
+matched: the loader (`version_proxy_runtime.inc`), the renderer
+(`runtime.cpp`, `uses_retail_cd_layout()` selects addresses) and rumble
+(`executable_profile.hpp`) each hold the hashes. Audio finds its layout by the
+dispatcher's bytes and leaves the hash gate to the loader. The installer
+(`.iss`, `Manage-Overhaul.ps1`), lifecycle test, component templates and
+`tools/Verify-ExecutableProfiles.ps1` carry the same list; adding a build means
+updating every one of them.
+
 ## Installer and ownership
 
 `installer/AITDTNN-PC-Overhaul.iss` declares files and installer metadata;

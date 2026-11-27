@@ -13,9 +13,13 @@ loads audio first, renderer second and rumble third, then reproduces
 module must return successful initialization while the game remains suspended;
 otherwise the loader fails closed.
 
-Supported executable SHA-256:
+Supported executable SHA-256 (the log records which profile matched):
 
-`5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672`
+`5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672` (15-slot/no-CD)
+
+`320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0` (retail CD)
+
+`228123a2e5620ad1976f83b867513b761ca824610e0bf73678c5beceba6bd815` (Steam)
 
 Static verification:
 

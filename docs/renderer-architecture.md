@@ -55,7 +55,8 @@ that never reached Bink. The runtime ledger proved the post-character-selection
 failure occurred earlier: confirmation completed, no movie request followed,
 and therefore no `BinkOpen` could occur.
 
-The supported executable has one common native movie controller at `0x004812CF`.
+Each supported executable has one common native movie controller: `0x004812CF`
+in the 15-slot build and `0x004810BF` in the retail CD and Steam builds.
 Script opcode 42, startup logos, intro, trailer, ending and direct UI callers all
 converge on it. The primary and alternate `BinkOpen` callsites are merely two
 path attempts inside the same native player.
@@ -186,7 +187,7 @@ that the executable never sets the swap interval itself. Movie frames therefore
 do not depend on VSync for synchronization.
 
 This feature is address-agnostic: it depends only on the present and Bink hooks
-already required for presentation, so both supported executables receive it
+already required for presentation, so every supported executable receives it
 without additional executable signatures. The authored movie rate is read
 defensively across the two known Bink 1.x field layouts; an unrecognised handle
 falls back to the documented retail rate and logs the observed interval.

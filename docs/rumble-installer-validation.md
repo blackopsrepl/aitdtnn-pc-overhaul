@@ -109,7 +109,16 @@ fresh install from Disc 1 CUE/BIN input, exact executable-hash preservation,
 pre-existing stack backup and normal restoration, refusal of an in-place upgrade
 without changing payload or ownership, and preservation of a modified DLL plus
 unknown game/app files while still restoring the previous stack. The temporary
-test tree was removed afterward.
+test tree was removed afterward. The matrix was re-run and passed once per
+supported executable: 15-slot/no-CD, retail CD and Steam.
+
+Steam support was runtime-tested by installing into the Steam library folder and
+launching through `steam://rungameid/259190`: every module logged the
+`english-steam` profile, the startup logos, intro and character-selection movies
+played proportionally, and Dreamcast music events followed into gameplay. The
+same rebuilt DLLs were run against the 15-slot/no-CD build through startup
+movies, character selection and music events, and against the retail CD build
+through verified hook installation.
 The reproducible harness is `installer/tests/Test-InstallerLifecycle.ps1`.
 
 Release packaging does not rebuild or substitute the validated runtime DLLs.
@@ -123,7 +132,7 @@ captures, repeated transitions, save/load cycles and clean exit.
 
 ## 11. Known limits
 
-- Only the exact executable hash in section 2 is supported.
+- Only the three exact executable hashes listed in `REPORT.md` section 2 are supported.
 - The installer requires a user-supplied Dreamcast disc image for music assets.
 - Music uses the PC engine's unchanged gameplay decisions and game-side DSEQ
   timing. DSEQ is not submitted as native Manatee SMSD, and a genuinely

@@ -1,8 +1,8 @@
 # AITD:TNN PC Overhaul
 
-An independent preservation and compatibility overhaul for the **original PC
-release** of *Alone in the Dark: The New Nightmare*—it is not based on and does
-not support the Steam port. It keeps the original PC game, story, sound
+An independent preservation and compatibility overhaul for the PC release of
+*Alone in the Dark: The New Nightmare*, supporting both the **original PC
+release** and the **Steam release**. It keeps the original PC game, story, sound
 effects, movies and game data intact while restoring selected Dreamcast-era
 features and modernizing presentation and controller support.
 
@@ -136,19 +136,20 @@ Rumble does not require a Dreamcast image at runtime.
 ## Requirements and compatibility
 
 - 64-bit Windows.
-- An installed English 15-slot/no-CD original PC release of *Alone in the
-  Dark: The New Nightmare* (not the Steam port).
+- An installed English original PC release (15-slot/no-CD or retail CD) or
+  Steam release of *Alone in the Dark: The New Nightmare*.
 - Either owned Dreamcast disc image in a supported format (`.cue`, `.gdi`,
   `.iso`, `.bin`, `.img`, or `.raw`) for the music restoration.
 - An OpenGL-capable display driver. An Xbox/XInput-compatible controller is
   optional.
 
-The installer supports two verified English original-PC executable profiles:
-the 15-slot/no-CD build and the retail CD build. Their SHA-256 values are:
+The installer supports three verified English executables—original 15-slot/no-CD,
+original retail CD, and Steam (app 259190)—with these SHA-256 values, in order:
 
 ```text
 5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672
 320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0
+228123a2e5620ad1976f83b867513b761ca824610e0bf73678c5beceba6bd815
 ```
 
 Address-sensitive modules fail closed when the executable is not one of these
@@ -158,9 +159,9 @@ supported builds. This protects other versions from receiving incompatible runti
 
 1. Close the game.
 2. Download and run `Setup.exe` from the [latest GitHub release](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/releases/latest). Do not rely on the copy committed to this repository; it can lag behind the current release.
-3. Select the folder containing `alone4.exe`.
+3. Select the folder containing `alone4.exe` (pre-filled for original and Steam installs).
 4. Select either of your owned Dreamcast disc images when prompted.
-5. Finish setup, then launch the game normally with `alone4.exe`.
+5. Finish setup, then launch the game normally: `alone4.exe`, or Play in Steam.
 
 The installer extracts the audio assets on your machine and installs the
 validated loader, audio restoration, renderer, rumble module, renderer shaders,
@@ -171,16 +172,15 @@ launcher, or create a shortcut.
 
 ### Which PC versions work?
 
-Version 0.5.1 supports the verified English 15-slot/no-CD executable and the
-stock retail PC CD executable. The installer checks the executable's SHA-256
-hash before installing address-sensitive modules, so other builds, repacks, and
-storefront releases are rejected rather than patched unsafely. See the two
-supported hashes in [Requirements and compatibility](#requirements-and-compatibility).
+The original 15-slot/no-CD and retail CD executables and the Steam executable.
+Setup checks the SHA-256 hash before installing address-sensitive modules, so
+other builds and repacks are rejected rather than patched unsafely.
 
 ### Does this support the Steam version?
 
-No. The overhaul was developed and tested against the original PC release; the
-Steam port is not supported or currently tested.
+Yes. Its `alone4.exe` is the retail CD executable with only the CD check patched
+out (proven byte-for-byte by `tools\Verify-ExecutableProfiles.ps1`), so it uses the
+retail CD hooks. If a Steam update changes it, the loader refuses to start.
 
 ### I have a supported executable, but setup says it is unsupported. What should I do?
 
@@ -214,9 +214,9 @@ or run DSEQ through Manatee's different native SMSD sequencer.
 
 ### Save games
 
-The original PC game expects a `Save` folder beside `alone4.exe`, but does not
-always create it. If saving appears to succeed but Load Game shows no saves,
-create this folder manually:
+The game expects a `Save` folder beside `alone4.exe` but does not always create
+it (Steam installs ship without one). Setup now creates it; if Load Game still
+shows no saves after saving, create it manually:
 
 ```text
 <game folder>\Save\

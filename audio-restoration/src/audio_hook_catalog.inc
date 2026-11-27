@@ -57,7 +57,9 @@ struct ContainerResolution {
 };
 
 // The original CD executable and the later 15-slot-compatible executable use
-// the same structures and dispatcher, shifted by fixed RVAs.
+// the same structures and dispatcher, shifted by fixed RVAs. The Steam release
+// is the retail CD image with only its CD check patched, so it resolves to the
+// "retail-cd" layout here; the loader's hash gate names the exact build.
 constexpr ExecutableProfile executable_profiles[] = {
     {"retail-cd", 0x97AAD, 0x1225EC, 0x121EB8, 0x121E84},
     {"15-slot",   0x97C0D, 0x1226EC, 0x121FB8, 0x121F84},

@@ -1,14 +1,17 @@
 # AITD:TNN PC renderer
 
-This module modernizes the verified English 15-slot/no-CD and retail-CD PC
-renderers without changing `alone4.exe` on disk and without replacing Bink,
-audio, input or game assets.
+This module modernizes the verified English 15-slot/no-CD, retail-CD and
+Steam PC renderers without changing `alone4.exe` on disk and without replacing
+Bink, audio, input or game assets.
 
 Supported executable SHA-256:
 
 `5668118e0e19d569986500a1c805a85397c8681e7b672b49a68645462eccc672` (15-slot/no-CD)
 
 `320908af4ce5c724b60a7eea6a5aade737d51d65aee8506744fce6e6dd0143e0` (retail CD)
+
+`228123a2e5620ad1976f83b867513b761ca824610e0bf73678c5beceba6bd815` (Steam; retail CD
+image with the CD check patched, so it uses the retail CD addresses)
 
 Public initializer:
 
