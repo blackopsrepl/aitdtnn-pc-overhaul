@@ -6,7 +6,8 @@ release** and the **Steam release**. It keeps the original PC game, story, sound
 effects, movies and game data intact while restoring selected Dreamcast-era
 features and modernizing presentation and controller support.
 
-Current integrated version: **0.5.1**.
+Current integrated version: **0.7.0**. Steam version sponsored by
+[@NomadBal](https://github.com/NomadBal)—thank you!
 
 ## In-game preview
 
@@ -258,12 +259,9 @@ audio, proportional rendering, CRT presentation, Xbox input, and rumble active
 together. This is not a claim of complete full-game validation; remaining FMV
 and presentation acceptance work is documented in [`REPORT.md`](REPORT.md).
 
-The renderer's investigation and movie inventory are available in
-[`renderer/docs/fmv-audit.md`](renderer/docs/fmv-audit.md), with presentation
-design notes in [`renderer/docs/crt-design.md`](renderer/docs/crt-design.md) and
-frame-pacing notes in
-[`renderer/docs/frame-pacing.md`](renderer/docs/frame-pacing.md).
-The technical report is now split into focused subsystem reports, all linked
+Renderer notes: [`fmv-audit.md`](renderer/docs/fmv-audit.md) (investigation and
+movie inventory), [`crt-design.md`](renderer/docs/crt-design.md) and
+[`frame-pacing.md`](renderer/docs/frame-pacing.md). Subsystem reports are linked
 from [`REPORT.md`](REPORT.md).
 
 ## Building from source
@@ -286,10 +284,9 @@ the asset builder, compiles the Inno Setup wizard, and creates the release
 artifacts. Use `-Development` only when a test installer from an uncommitted
 tree is required.
 
-The destructive installer lifecycle matrix is available at
-`installer\tests\Test-InstallerLifecycle.ps1`; it requires a user-supplied
-supported game executable and Dreamcast image and runs in a disposable test
-directory.
+The destructive installer lifecycle matrix, `installer\tests\Test-InstallerLifecycle.ps1`,
+needs a supported game executable and Dreamcast image and runs in a disposable
+test directory.
 
 ## License and credits
 
@@ -297,3 +294,6 @@ See [`LICENSE.txt`](LICENSE.txt), [`NOTICE.md`](NOTICE.md), and the component
 license files for licensing and third-party notices. The audio restoration
 includes the GPLv3-only Highly Theoretical AICA emulation core; Xidi is included
 under its own license.
+
+Steam version support was sponsored by [@NomadBal](https://github.com/NomadBal).
+Many thanks for making it happen!
