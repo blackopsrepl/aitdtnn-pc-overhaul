@@ -198,3 +198,34 @@ bool install_movie_skip_gate() {
     return true;
 #endif
 }
+
+// The engine picks its FMV backend from the OpenGL renderer string: names
+// containing RADEON, TNT, KYRO, RAGE PRO or SAVAGE3D (and one settings flag)
+// fall through to a single store that clears the "use OpenGL for videos" byte,
+// selecting native Bink buffers. Every AMD driver reports a Radeon name, so AMD
+// users got the buffer backend, whose window scaling and display-dependent
+// surface formats break proportional and CRT presentation (issue #6). That store
+// is the byte's only writer and its initial value is 1, so rewriting its
+// immediate to 1 keeps every GPU on the verified OpenGL texture backend.
+bool install_movie_backend_selection() {
+#ifdef AITD4_TEST_HARNESS
+    log_line("FMV backend selection patch skipped in test harness");
+    return true;
+#else
+    auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
+    const bool retail = uses_retail_cd_layout();
+    auto* store = image + (retail ? 0x96D4B : 0x96EA9);
+    // mov byte ptr [use_opengl_videos], 0
+    constexpr std::uint8_t expected_retail[7]{0xC6, 0x05, 0xF0, 0xC4, 0x4C, 0x00, 0x00};
+    constexpr std::uint8_t expected_15_slot[7]{0xC6, 0x05, 0x18, 0xC5, 0x4C, 0x00, 0x00};
+    const auto* expected = retail ? expected_retail : expected_15_slot;
+    if (std::memcmp(store, expected, sizeof(expected_retail)) != 0) {
+        log_line("FMV backend selection signature mismatch address=%p", store);
+        return false;
+    }
+    constexpr std::uint8_t use_opengl = 1;
+    if (!write_code_patch(store + 6, &use_opengl, sizeof(use_opengl))) return false;
+    log_line("FMV backend selection pinned to native OpenGL textures address=%p", store);
+    return true;
+#endif
+}

@@ -87,6 +87,7 @@ constexpr CodeInterval kClaimedCodeIntervals[] = {
     {0x000812cfu, 9}, // renderer movie request
     {0x0009dedfu, 5}, // renderer movie skip getter
     {0x0009df37u, 5}, // renderer native Bink frame lifecycle
+    {0x00096ea9u, 7}, // renderer FMV backend selection
 };
 
 }  // namespace aitdtnn::rumble

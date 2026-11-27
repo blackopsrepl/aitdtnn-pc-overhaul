@@ -165,6 +165,7 @@ bool install_graphics_hooks() {
     ok &= install_movie_request_audit();
     ok &= install_cutscene_input_reuse_guard();
     ok &= install_movie_skip_gate();
+    ok &= install_movie_backend_selection();
     patch_iat("GDI32.dll", "SwapBuffers", reinterpret_cast<void*>(hooked_swap_buffers),
               reinterpret_cast<void**>(&real_swap_buffers));
     patch_iat("GDI32.dll", "ChoosePixelFormat", reinterpret_cast<void*>(hooked_choose_pixel_format),
