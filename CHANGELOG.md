@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.7.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.6.0...v0.7.0) (2026-11-27)
+
+### Features
+
+* **installer:** detect and accept Steam installs ([ed1aa34](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/ed1aa34dce5cdf276405dacfe5c2228cb1713f1e))
+* **loader:** accept the Steam alone4.exe as a named profile ([d1d42b0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/d1d42b027b6024d5feb21e8d82253a25e3e9d834))
+* **renderer:** map the Steam executable to the retail CD layout ([158974d](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/158974db0ae6e3348210649243e075c0685659f0))
+* **rumble:** support the Steam executable with retail CD addresses ([c67944c](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/c67944c9186f1f71a83fb554919a9a536e8094df))
+
 ## [0.6.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.5.1...v0.6.0) (2026-09-16)
 
 ### Features
