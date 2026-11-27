@@ -12,7 +12,7 @@
     },
     {
       "path": "game/renderer/aitd4-renderer-hook.dll",
-      "sha256": "D61C3594DA9622E25F01A4ED6C030C2D64FEF128E193D7CF711EC490B60AB01B"
+      "sha256": "7B5E664014FB6684BB7A805A21F9FC37B91459D7A92314C329864665996CEE70"
     },
     {
       "path": "game/rumble/aitd4-rumble-hook.dll",
