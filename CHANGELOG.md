@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [0.7.1](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.7.0...v0.7.1) (2026-11-27)
+
+### Bug Fixes
+
+* **renderer:** keep every GPU on the native OpenGL FMV backend ([fc30e72](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/commit/fc30e72acb6bfe61063ac0a6fdd16a1eb935baf3)), references [#6](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/issues/6)
+
 ## [0.7.0](https://github.com/blackopsrepl/aitdtnn-pc-overhaul/compare/v0.6.0...v0.7.0) (2026-11-27)
 
 ### Features
