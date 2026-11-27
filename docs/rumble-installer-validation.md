@@ -100,8 +100,10 @@ The active OpenGL Bink backend and Carnby's post-interstitial `SELECT_C` have
 been manually runtime-tested through startup and the first playable areas with
 Dreamcast synthesis/banks, PC sound effects and movie audio, proportional
 rendering, the CRT pipeline, Xbox input and rumble active together. The retained
-ledger records all 87 frames of `SELECT_C`. Aline and the alternate Bink buffer
-backend currently have static or synthetic-harness coverage only. This is not a
+ledger records all 87 frames of `SELECT_C`. Aline has static coverage only. The
+alternate Bink buffer backend is no longer selected in production: the renderer
+pins every GPU, including Radeon-named AMD drivers, to the OpenGL backend
+(validated with a spoofed Radeon renderer string; real AMD hardware unverified). This is not a
 full-game automated audio or FMV comparison.
 
 The non-publishable development installer has passed a disposable test matrix:

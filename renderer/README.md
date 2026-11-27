@@ -57,7 +57,9 @@ Implemented production path:
   redirects decoded `BINKSURFACE24R` pixels to a private 640x480 canvas, and
   replaces its direct Bink blit with one CRT presentation. With CRT disabled,
   CRT-specific redirection is disabled while proportional scaling, the input
-  guard and lifecycle logging remain active.
+  guard and lifecycle logging remain active. The renderer pins the engine's
+  backend choice to OpenGL, because the game sent every Radeon (AMD) GPU to the
+  buffer backend, which failed on modern drivers (issue #6).
 - A neutral-release movie skip gate, native character-selection restoration
   for `SELECT_A` and `SELECT_C` at the verified post-portrait/title continuation,
   and an FMV lifecycle ledger. Native Bink remains responsible for decoding,

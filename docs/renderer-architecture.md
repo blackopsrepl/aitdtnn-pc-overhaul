@@ -132,6 +132,19 @@ first-path opens are returned unchanged so the game's own alternate-path retry
 still occurs. Unsupported formats and rejected scaling fail closed rather than
 falling back to distorted output.
 
+The engine chooses the backend from the OpenGL renderer string: `RADEON`, `TNT`,
+`KYRO`, `RAGE PRO` and `SAVAGE3D` (plus one settings flag) select the buffer
+backend. Every AMD driver reports a Radeon name, and on modern drivers that
+backend's window scaling and display-dependent 32-bit surface broke both
+presentation modes (issue #6). The renderer therefore rewrites the only store
+that clears the game's use-OpenGL-for-videos byte (RVA `0x96D4B` retail CD and
+Steam, `0x96EA9` 15-slot), keeping every GPU on the OpenGL backend. The other
+listed chipsets predate OpenGL 3.3 and cannot run the overhaul, so nothing loses
+a working path. With a spoofed Radeon string on NVIDIA, the unpatched renderer
+reproduced both reported errors and the patched one played the startup movies
+with CRT on and off; real AMD hardware is still unverified. The buffer-backend
+code stays as a guarded path for builds that might still reach it.
+
 Replacement movie packs are outside this repository. They may differ in image,
 audio or authored content; the renderer neither supplies nor silently rewrites
 them.
