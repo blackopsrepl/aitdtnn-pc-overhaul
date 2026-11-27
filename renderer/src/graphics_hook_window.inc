@@ -133,11 +133,11 @@ std::uint32_t __fastcall hooked_get_new_pressed(void* input_state, void*) {
 
 void __cdecl hooked_character_select_advance() {
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* selection_state = reinterpret_cast<std::uint32_t*>(image + (is_retail_executable() ? 0x102A6C : 0x102B64));
+    auto* selection_state = reinterpret_cast<std::uint32_t*>(image + (uses_retail_cd_layout() ? 0x102A6C : 0x102B64));
     const std::uint32_t state_before = *selection_state;
     std::uint32_t selected_item = 0;
     if (state_before == 2) {
-        void* menu = *reinterpret_cast<void**>(image + (is_retail_executable() ? 0x102A64 : 0x102B5C));
+        void* menu = *reinterpret_cast<void**>(image + (uses_retail_cd_layout() ? 0x102A64 : 0x102B5C));
         if (menu) selected_item = real_current_menu_item(menu);
     }
     real_character_select_advance();
@@ -145,7 +145,7 @@ void __cdecl hooked_character_select_advance() {
     const std::uint32_t state_after = *selection_state;
     if (state_before != 2 || state_after != 3) return;
 
-    auto* input_state = image + (is_retail_executable() ? 0x1BDB08 : 0x1BDC08);
+    auto* input_state = image + (uses_retail_cd_layout() ? 0x1BDB08 : 0x1BDC08);
     auto* pressed = reinterpret_cast<std::uint32_t*>(input_state + 8);
     const std::uint32_t carried = *pressed & CutsceneInputGuard::action_mask;
     *pressed &= ~CutsceneInputGuard::action_mask;
@@ -167,9 +167,9 @@ void __cdecl hooked_character_select_advance() {
 int __cdecl hooked_post_selection_platform() {
     if (InterlockedCompareExchange(&post_selection_movie_in_flight, 1, 0) == 0) {
         auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-        const std::uint8_t character = *(image + (is_retail_executable() ? 0x101658 : 0x101758));
+        const std::uint8_t character = *(image + (uses_retail_cd_layout() ? 0x101658 : 0x101758));
         const int movie_id = CharacterSelectMovieGate::movie_for_character_byte(character);
-        auto* input_state = image + (is_retail_executable() ? 0x1BDB08 : 0x1BDC08);
+        auto* input_state = image + (uses_retail_cd_layout() ? 0x1BDB08 : 0x1BDC08);
         auto* pressed = reinterpret_cast<std::uint32_t*>(input_state + 8);
         const std::uint32_t carried = *pressed & CutsceneInputGuard::action_mask;
         *pressed &= ~CutsceneInputGuard::action_mask;
@@ -195,7 +195,7 @@ bool install_cutscene_input_reuse_guard() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    const bool retail = is_retail_executable();
+    const bool retail = uses_retail_cd_layout();
     auto* getter = image + (retail ? 0xA3CA2 : 0xA3E02);
     auto* selection_call = image + (retail ? 0x7FA6F : 0x7FCE5);
     auto* post_selection_call = image + (retail ? 0x79987 : 0xBAE94);

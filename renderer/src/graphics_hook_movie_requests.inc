@@ -5,7 +5,7 @@
 const char* movie_request_name(int id, char (&name)[9]) {
     if (id < 0 || id >= 64) return "<invalid>";
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    const char* entry = reinterpret_cast<const char*>(image + (is_retail_executable() ? 0x103628 : 0x103728) + id * 10);
+    const char* entry = reinterpret_cast<const char*>(image + (uses_retail_cd_layout() ? 0x103628 : 0x103728) + id * 10);
     std::memcpy(name, entry, 8);
     name[8] = '\0';
     return name[0] ? name : "<empty>";
@@ -36,7 +36,7 @@ bool install_movie_request_audit() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* target = image + (is_retail_executable() ? 0x810BF : 0x812CF);
+    auto* target = image + (uses_retail_cd_layout() ? 0x810BF : 0x812CF);
     constexpr std::size_t prologue_size = 9;
     constexpr std::uint8_t expected[prologue_size]{
         0x55, 0x8B, 0xEC, 0x81, 0xEC, 0x94, 0x00, 0x00, 0x00};
@@ -176,7 +176,7 @@ bool install_movie_skip_gate() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* call = image + (is_retail_executable() ? 0x9DD7F : 0x9DEDF);
+    auto* call = image + (uses_retail_cd_layout() ? 0x9DD7F : 0x9DEDF);
     constexpr std::uint8_t expected[5]{0xE8, 0x1E, 0x5F, 0x00, 0x00};
     if (std::memcmp(call, expected, sizeof(expected)) != 0) {
         log_line("movie skip callsite signature mismatch address=%p", call);

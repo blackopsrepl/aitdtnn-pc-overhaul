@@ -8,8 +8,8 @@ bool install_native_movie_frame_hook() {
     return true;
 #else
     auto* image = static_cast<std::uint8_t*>(static_cast<void*>(GetModuleHandleW(nullptr)));
-    auto* call = image + (is_retail_executable() ? 0x9DDD7 : 0x9DF37);
-    auto* native_frame = image + (is_retail_executable() ? 0x9DF42 : 0x9E0A2);
+    auto* call = image + (uses_retail_cd_layout() ? 0x9DDD7 : 0x9DF37);
+    auto* native_frame = image + (uses_retail_cd_layout() ? 0x9DF42 : 0x9E0A2);
     constexpr std::uint8_t expected_call[5]{0xE8, 0x66, 0x01, 0x00, 0x00};
     constexpr std::uint8_t expected_frame_prefix[23]{
         0x55, 0x8B, 0xEC, 0x8B, 0x45, 0x08, 0x50, 0xFF, 0x15, 0x38, 0xB2, 0x4B,

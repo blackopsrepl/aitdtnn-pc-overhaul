@@ -46,6 +46,9 @@ enum class ExecutableProfile {
     unknown,
     english_15_slot_no_cd,
     english_retail_cd,
+    // Steam app 259190: the retail CD image with its CD check patched out. It
+    // shares every renderer hook address with english_retail_cd.
+    english_steam,
 };
 
 extern ExecutableProfile g_executable_profile;
@@ -54,6 +57,8 @@ void log_line(const char* format, ...);
 bool initialize_runtime(HMODULE self);
 bool reload_runtime_config();
 bool validate_supported_executable();
-bool is_retail_executable();
+// True for builds whose code and data addresses match the retail CD executable.
+bool uses_retail_cd_layout();
+const char* executable_profile_name();
 
 }  // namespace aitd4

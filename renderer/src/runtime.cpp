@@ -32,6 +32,8 @@ constexpr char supported_15_slot_sha256[] =
     "5668118E0E19D569986500A1C805A85397C8681E7B672B49A68645462ECCC672";
 constexpr char supported_retail_sha256[] =
     "320908AF4CE5C724B60A7EEA6A5AADE737D51D65AEE8506744FCE6E6DD0143E0";
+constexpr char supported_steam_sha256[] =
+    "228123A2E5620AD1976F83B867513B761CA824610E0BF73678C5BECEBA6BD815";
 
 bool ini_bool(const char* path, const char* section, const char* key, bool fallback) {
     return GetPrivateProfileIntA(section, key, fallback ? 1 : 0, path) != 0;
@@ -249,6 +251,8 @@ bool validate_supported_executable() {
         g_executable_profile = ExecutableProfile::english_15_slot_no_cd;
     } else if (actual == supported_retail_sha256) {
         g_executable_profile = ExecutableProfile::english_retail_cd;
+    } else if (actual == supported_steam_sha256) {
+        g_executable_profile = ExecutableProfile::english_steam;
     } else {
         log_line("unsupported executable sha256=%s", actual.c_str());
         MessageBoxA(nullptr,
@@ -257,14 +261,23 @@ bool validate_supported_executable() {
                     "AITD4 renderer", MB_OK | MB_ICONERROR | MB_SYSTEMMODAL);
         return false;
     }
-    log_line("executable verified profile=%s sha256=%s",
-             is_retail_executable() ? "english-retail-cd" : "english-15-slot-no-cd",
-             actual.c_str());
+    log_line("executable verified profile=%s layout=%s sha256=%s", executable_profile_name(),
+             uses_retail_cd_layout() ? "retail-cd" : "15-slot", actual.c_str());
     return true;
 }
 
-bool is_retail_executable() {
-    return g_executable_profile == ExecutableProfile::english_retail_cd;
+bool uses_retail_cd_layout() {
+    return g_executable_profile == ExecutableProfile::english_retail_cd ||
+           g_executable_profile == ExecutableProfile::english_steam;
+}
+
+const char* executable_profile_name() {
+    switch (g_executable_profile) {
+    case ExecutableProfile::english_15_slot_no_cd: return "english-15-slot-no-cd";
+    case ExecutableProfile::english_retail_cd: return "english-retail-cd";
+    case ExecutableProfile::english_steam: return "english-steam";
+    default: return "unknown";
+    }
 }
 
 }  // namespace aitd4
