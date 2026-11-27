@@ -37,6 +37,16 @@ constexpr unsigned char kSupportedRetailExeSha256[32] = {
     0x44, 0xfc, 0xe6, 0xe6, 0xdd, 0x01, 0x43, 0xe0,
 };
 
+// Steam app 259190 ships the retail CD image with only its CD check patched
+// (RVAs 0x8d722 and 0x8db28) and the insert-CD prompt text changed, so it uses
+// the retail CD rumble addresses unchanged.
+constexpr unsigned char kSupportedSteamExeSha256[32] = {
+    0x22, 0x81, 0x23, 0xa2, 0xe5, 0x62, 0x0a, 0xd1,
+    0x97, 0x6f, 0x83, 0xb8, 0x67, 0x51, 0x3b, 0x76,
+    0x1c, 0xa8, 0x24, 0x61, 0x0e, 0x0b, 0xf7, 0x36,
+    0x78, 0xc5, 0xbe, 0xce, 0xba, 0x6b, 0xd8, 0x15,
+};
+
 struct ExecutableProfile {
     const char* name;
     const unsigned char* sha256;
@@ -49,6 +59,8 @@ constexpr ExecutableProfile kExecutableProfiles[] = {
     {"english-15-slot-no-cd", kSupported15SlotExeSha256,
      kEnableRva, kBackendRva, kAvailableRva},
     {"english-retail-cd", kSupportedRetailExeSha256,
+     0x000a420cu, 0x000a4219u, 0x000a423fu},
+    {"english-steam", kSupportedSteamExeSha256,
      0x000a420cu, 0x000a4219u, 0x000a423fu},
 };
 

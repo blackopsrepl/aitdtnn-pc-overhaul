@@ -45,11 +45,25 @@ int main() {
     static_assert(kEnableRva == 0x000a436cu);
     static_assert(kBackendRva == 0x000a4379u);
     static_assert(kAvailableRva == 0x000a439fu);
-    static_assert(std::size(kExecutableProfiles) == 2);
+    static_assert(std::size(kExecutableProfiles) == 3);
     static_assert(kExecutableProfiles[0].enable_rva == kEnableRva);
     static_assert(kExecutableProfiles[1].enable_rva == 0x000a420cu);
     static_assert(kExecutableProfiles[1].backend_rva == 0x000a4219u);
     static_assert(kExecutableProfiles[1].available_rva == 0x000a423fu);
+    // Steam is the retail CD image with the CD check patched: same addresses.
+    static_assert(kExecutableProfiles[2].enable_rva == kExecutableProfiles[1].enable_rva);
+    static_assert(kExecutableProfiles[2].backend_rva == kExecutableProfiles[1].backend_rva);
+    static_assert(kExecutableProfiles[2].available_rva == kExecutableProfiles[1].available_rva);
+    static_assert(kExecutableProfiles[2].sha256 == kSupportedSteamExeSha256);
+    // The Steam CD-check patch sites must stay clear of the retail rumble code.
+    constexpr CodeInterval steam_patches[] = {{0x0008d722u, 2}, {0x0008db28u, 1}};
+    constexpr CodeInterval retail_rumble[] = {
+        {0x000a420cu, 13}, {0x000a4219u, 15}, {0x000a423fu, 13}};
+    for (const auto patch : steam_patches) {
+        for (const auto rumble : retail_rumble) {
+            assert(!intervals_overlap(patch, rumble));
+        }
+    }
     static_assert(sizeof(kExpectedEnable) == 13);
     static_assert(sizeof(kExpectedBackend) == 15);
     static_assert(sizeof(kExpectedAvailable) == 13);
